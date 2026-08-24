@@ -1,0 +1,1849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Overshare — Conversation Cards</title>
+<!-- Telegram Mini App bridge — must load before the game script below.
+     Loading from telegram.org (not a copy) so it always matches the client. -->
+<script src="https://telegram.org/js/telegram-web-app.js?63"></script>
+<style>
+  :root {
+    --bg: #0f1115;
+    --surface: #1a1d24;
+    --surface-2: #23262f;
+    --text: #f3f2ef;
+    --text-dim: #9a9ba3;
+    --couples: #e8607a;
+    --couples-dim: #3a2229;
+    --friends: #f0a84e;
+    --friends-dim: #3a2f1c;
+    --fellowship: #4fb0a0;
+    --fellowship-dim: #1c3330;
+    --wyr: #9b8cf2;
+    --wyr-dim: #262143;
+    --radius-lg: 28px;
+    --radius-md: 18px;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: #05060a;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    overscroll-behavior: none;
+  }
+
+  #app-wrap {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+
+  /* App shell: fills the screen edge-to-edge on phones (true responsive web app,
+     not a fake device mockup); becomes a centered floating panel once there's
+     room to spare on tablets/desktop. */
+  .phone {
+    width: 100%;
+    max-width: 480px;
+    height: 100vh;
+    height: 100dvh;
+    background: transparent;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    color: var(--text);
+    padding-top: calc(env(safe-area-inset-top, 0px) + 40px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    --accent: var(--couples);
+    --accent-dark: #c23f5d;
+  }
+
+  .phone.theme-couples { --accent: var(--couples); --accent-dark: #c23f5d; }
+  .phone.theme-fellowship { --accent: var(--fellowship); --accent-dark: #2f7f72; }
+  .phone.theme-friends { --accent: var(--friends); --accent-dark: #d47f26; }
+  .phone.theme-wouldyourather { --accent: var(--wyr); --accent-dark: #6f5cd6; }
+
+  @media (min-width: 620px) {
+    #app-wrap { padding: 32px 16px; }
+    .phone {
+      height: min(90vh, 860px);
+    }
+  }
+
+  @media (min-width: 960px) {
+    .phone { max-width: 430px; }
+  }
+
+  .screen {
+    flex: 1;
+    display: none;
+    flex-direction: column;
+    height: 100%;
+    padding-top: 26px;
+  }
+  .screen.active { display: flex; }
+
+  /* ---------- HOME SCREEN ---------- */
+  #home { padding: 0 22px 24px; overflow-y: auto; }
+
+  .brand { text-align: center; margin-bottom: 6px; }
+  .brand .glass { font-size: 34px; display: block; margin-bottom: 6px; }
+  .brand h1 { font-size: 22px; letter-spacing: 0.5px; margin: 0; font-weight: 700; }
+  .brand p { color: var(--text-dim); font-size: 13px; margin: 6px 0 0; }
+
+  .cat-list { margin-top: 26px; display: flex; flex-direction: column; gap: 14px; }
+
+  .cat-card {
+    border-radius: var(--radius-md);
+    padding: 18px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border: 1px solid rgba(255,255,255,0.06);
+    cursor: pointer;
+    transition: transform 0.15s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .cat-card:active { transform: scale(0.97); }
+
+  .cat-card .icon {
+    width: 46px; height: 46px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; flex-shrink: 0;
+  }
+  .cat-card .info { flex: 1; }
+  .cat-card .info h3 { margin: 0 0 3px; font-size: 16px; font-weight: 700; }
+  .cat-card .info p { margin: 0; font-size: 12.5px; color: var(--text-dim); }
+  .cat-card .count { font-size: 11px; color: var(--text-dim); font-weight: 600; }
+  .cat-card .chev { color: var(--text-dim); font-size: 18px; }
+
+  .cat-card.couples { background: linear-gradient(135deg, var(--couples-dim), #221820); }
+  .cat-card.couples .icon { background: rgba(232,96,122,0.18); color: var(--couples); }
+
+  .cat-card.friends { background: linear-gradient(135deg, var(--friends-dim), #221c14); }
+  .cat-card.friends .icon { background: rgba(240,168,78,0.18); color: var(--friends); }
+
+  .cat-card.fellowship { background: linear-gradient(135deg, var(--fellowship-dim), #14211f); }
+  .cat-card.fellowship .icon { background: rgba(79,176,160,0.18); color: var(--fellowship); }
+
+  .cat-card.wyr { background: linear-gradient(135deg, var(--wyr-dim), #201c33); }
+  .cat-card.wyr .icon { background: rgba(155,140,242,0.18); color: var(--wyr); }
+
+  .cat-card.disabled { cursor: default; opacity: 0.55; }
+  .cat-card.disabled:active { transform: none; }
+
+  .soon-pill {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.6px;
+    padding: 4px 9px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.08);
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+
+  .home-footer {
+    margin-top: auto;
+    padding-top: 18px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 11px;
+  }
+
+  .home-footer a {
+    color: var(--text-dim);
+    text-decoration: underline;
+    text-decoration-color: rgba(255,255,255,0.25);
+    text-underline-offset: 2px;
+  }
+
+  .home-footer a:hover,
+  .home-footer a:active {
+    color: var(--text);
+  }
+
+  .toast {
+    position: absolute;
+    bottom: 26px;
+    left: 22px;
+    right: 22px;
+    background: var(--surface-2);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    padding: 12px 16px;
+    font-size: 12.5px;
+    text-align: center;
+    color: var(--text);
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: none;
+    z-index: 60;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  /* ---------- CATEGORY MENU ---------- */
+  #category-menu { padding: 0 22px 22px; overflow-y: auto; }
+
+  .menu-top {
+    display: flex; align-items: center; gap: 12px;
+    padding-bottom: 18px;
+  }
+  .menu-top h2 { margin: 0; font-size: 18px; font-weight: 700; }
+
+  .icon-btn {
+    width: 38px; height: 38px; border-radius: 12px;
+    background: var(--surface-2);
+    border: 1px solid rgba(255,255,255,0.06);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; cursor: pointer; color: var(--text);
+    flex-shrink: 0;
+  }
+  .icon-btn:active { transform: scale(0.92); }
+
+  .play-all-btn {
+    background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+    border-radius: var(--radius-md);
+    padding: 18px;
+    display: flex; align-items: center; gap: 12px;
+    cursor: pointer;
+    margin-bottom: 18px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.3);
+  }
+  .play-all-btn:active { transform: scale(0.98); }
+  .play-all-btn .emoji { font-size: 24px; }
+  .play-all-btn .txt h3 { margin: 0 0 2px; font-size: 15px; font-weight: 800; }
+  .play-all-btn .txt p { margin: 0; font-size: 11.5px; opacity: 0.9; }
+
+  .sub-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin: 4px 0 10px;
+  }
+
+  .sub-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .sub-card {
+    background: var(--surface);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 16px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+  }
+  .sub-card:active { transform: scale(0.97); }
+  .sub-card .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent); flex-shrink: 0;
+  }
+  .sub-card .txt { flex: 1; }
+  .sub-card .txt .en { font-size: 14px; font-weight: 700; }
+  .sub-card .txt .zh { font-size: 11.5px; color: var(--text-dim); margin-top: 1px; }
+  .sub-card .n { font-size: 11px; color: var(--text-dim); font-weight: 600; }
+
+  /* ---------- GAME SCREEN ---------- */
+  #game { padding: 0 20px 22px; position: relative; }
+
+  .game-top {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 14px;
+  }
+  .game-title { text-align: center; font-size: 13px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; }
+
+  .progress-track { height: 5px; border-radius: 6px; background: var(--surface-2); overflow: hidden; margin-bottom: 6px; }
+  .progress-fill { height: 100%; border-radius: 6px; background: var(--accent); transition: width 0.35s ease; }
+  .progress-label { font-size: 11px; color: var(--text-dim); text-align: center; margin-bottom: 18px; }
+
+  .card-stage { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; }
+
+  .card {
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    max-height: 400px;
+    border-radius: var(--radius-lg);
+    padding: 30px 26px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    position: relative;
+    box-shadow: 0 20px 45px rgba(0,0,0,0.4);
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.28s cubic-bezier(.22,.9,.32,1), opacity 0.22s ease;
+    background: linear-gradient(155deg, var(--accent), var(--accent-dark));
+    color: #fffaf7;
+  }
+  .card.swiping-out { transform: translateX(-120%) rotate(-8deg); opacity: 0; }
+  .card.entering { transform: translateX(0); opacity: 1; }
+
+  .card .tag { position: absolute; top: 20px; left: 24px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; opacity: 0.85; }
+  .card .num { position: absolute; top: 20px; right: 24px; font-size: 10.5px; font-weight: 700; opacity: 0.6; }
+  .card .prompt { font-size: 19px; font-weight: 700; line-height: 1.4; }
+  .card .prompt-zh { font-size: 14px; font-weight: 500; line-height: 1.6; margin-top: 14px; opacity: 0.88; }
+  .card .hint { position: absolute; bottom: 20px; font-size: 11px; opacity: 0.65; font-weight: 600; }
+
+  .game-controls { display: flex; gap: 12px; margin-top: 22px; }
+  .ctrl-btn {
+    flex: 1; padding: 15px 0; border-radius: 16px; text-align: center;
+    font-weight: 700; font-size: 14px; cursor: pointer; border: none; color: #fff;
+    background: var(--accent);
+  }
+  .ctrl-btn:active { transform: scale(0.96); }
+  .ctrl-btn.secondary { background: var(--surface-2); color: var(--text); border: 1px solid rgba(255,255,255,0.08); flex: 0 0 52px; font-size: 17px; }
+
+  .swipe-tip { text-align: center; font-size: 11px; color: var(--text-dim); margin-top: 12px; }
+
+  .end-overlay {
+    position: absolute; inset: 0;
+    background: rgba(5,6,10,0.94);
+    display: none; align-items: center; justify-content: center;
+    flex-direction: column; text-align: center; padding: 40px;
+    border-radius: 36px; z-index: 40;
+  }
+  .end-overlay.active { display: flex; }
+  .end-overlay .emoji { font-size: 44px; margin-bottom: 14px; }
+  .end-overlay h2 { margin: 0 0 8px; font-size: 20px; }
+  .end-overlay p { color: var(--text-dim); font-size: 13px; margin: 0 0 26px; }
+  .end-overlay .ctrl-btn { width: 100%; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+
+<div id="app-wrap">
+  <div class="phone">
+
+    <!-- HOME SCREEN -->
+    <div class="screen active" id="home">
+      <div class="brand">
+        <span class="glass">🙊</span>
+        <h1>Overshare</h1>
+        <p>The card game that gets people talking.</p>
+      </div>
+
+      <div class="cat-list">
+        <div class="cat-card fellowship" onclick="openCategoryMenu('fellowship')">
+          <div class="icon">🤝</div>
+          <div class="info">
+            <h3>Fellowship</h3>
+            <p>300 bilingual questions · 10 decks · EN / 中文</p>
+          </div>
+          <div class="count">300</div>
+          <div class="chev">›</div>
+        </div>
+
+        <div class="cat-card friends" onclick="openCategoryMenu('friends')">
+          <div class="icon">🎉</div>
+          <div class="info">
+            <h3>Friends</h3>
+            <p>300 bilingual questions · 10 decks · EN / 中文</p>
+          </div>
+          <div class="count">300</div>
+          <div class="chev">›</div>
+        </div>
+
+        <div class="cat-card couples" onclick="openCategoryMenu('couples')">
+          <div class="icon">💗</div>
+          <div class="info">
+            <h3>Couples</h3>
+            <p>200 bilingual questions · 8 decks · EN / 中文</p>
+          </div>
+          <div class="count">200</div>
+          <div class="chev">›</div>
+        </div>
+
+        <div class="cat-card wyr" onclick="openCategoryMenu('wouldyourather')">
+          <div class="icon">🤔</div>
+          <div class="info">
+            <h3>Would You Rather</h3>
+            <p>300 bilingual questions · 10 decks · EN / 中文</p>
+          </div>
+          <div class="count">300</div>
+          <div class="chev">›</div>
+        </div>
+      </div>
+
+      <div class="home-footer"><a href="https://isabelletan.io" target="_blank" rel="noopener">isabelletan.io</a></div>
+      <div class="toast" id="toast"></div>
+    </div>
+
+    <!-- CATEGORY SUBMENU (shared by Fellowship / Couples) -->
+    <div class="screen" id="category-menu">
+      <div class="menu-top" style="padding-left:22px;padding-right:22px;">
+        <div class="icon-btn" onclick="goHome()">←</div>
+        <h2 id="menu-title">Couples</h2>
+      </div>
+      <div style="padding:0 22px 22px; overflow-y:auto; flex:1;">
+        <div class="play-all-btn" id="play-all-btn">
+          <div class="emoji">🔀</div>
+          <div class="txt">
+            <h3 id="play-all-title">Play All (Shuffled)</h3>
+            <p>Every deck mixed together · light → deep</p>
+          </div>
+        </div>
+
+        <div class="sub-label">Or pick a deck</div>
+        <div class="sub-list" id="sub-list"></div>
+      </div>
+    </div>
+
+    <!-- GAME SCREEN -->
+    <div class="screen" id="game">
+      <div class="game-top">
+        <div class="icon-btn" onclick="goCategoryMenu()">←</div>
+        <div class="game-title" id="game-title">Couples</div>
+        <div class="icon-btn" onclick="shuffleDeck()">🔀</div>
+      </div>
+
+      <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+      <div class="progress-label" id="progress-label">Card 1 of 20</div>
+
+      <div class="card-stage">
+        <div class="card entering" id="card" onclick="nextCard()">
+          <div class="tag" id="card-tag">COUPLES</div>
+          <div class="num" id="card-num">01</div>
+          <div class="prompt" id="card-prompt">Loading…</div>
+          <div class="prompt-zh" id="card-prompt-zh"></div>
+          <div class="hint">tap card for next</div>
+        </div>
+
+        <div class="end-overlay" id="end-overlay">
+          <div class="emoji">✨</div>
+          <h2>Deck complete</h2>
+          <p>You made it through all the cards. Reshuffle or pick a new deck.</p>
+          <button class="ctrl-btn" onclick="shuffleDeck()">Play again</button>
+          <button class="ctrl-btn secondary" style="width:100%;flex:none" onclick="goCategoryMenu()">Back to decks</button>
+        </div>
+      </div>
+
+      <div class="game-controls">
+        <button class="ctrl-btn secondary" onclick="prevCard()">‹</button>
+        <button class="ctrl-btn" id="next-btn" onclick="nextCard()">Next card</button>
+      </div>
+      <div class="swipe-tip">Tap the card, or use Next / Back</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const COUPLES_DECKS = {
+  icebreakers: { en: "Icebreakers", zh: "破冰暖场", cards: [
+    ["What's your favorite way to spend a lazy Sunday together?", "你最喜欢和我怎么度过一个悠闲的周日？"],
+    ["If we could teleport anywhere for dinner tonight, where would you pick?", "如果今晚能瞬间移动到任何地方吃饭，你会选哪里？"],
+    ["What's a small thing I do that always makes you smile?", "我做的哪件小事总能让你微笑？"],
+    ["What's your go-to comfort food?", "你最喜欢的治愈系食物是什么？"],
+    ["If you had a completely free day with no responsibilities, what would you do?", "如果有完全自由、没有任何责任的一天，你会做什么？"],
+    ["What's a hobby you'd like for us to try together?", "你想和我一起尝试的爱好是什么？"],
+    ["What song always gets you dancing?", "哪首歌总能让你忍不住跳舞？"],
+    ["What's your favorite memory from this past month?", "过去一个月里你最喜欢的回忆是什么？"],
+    ["If we started a business together, what would it be?", "如果我们一起创业，你觉得会做什么生意？"],
+    ["What's one thing you're grateful for today?", "今天你最感恩的一件事是什么？"],
+    ["What's your ideal weekend getaway?", "你理想中的周末小旅行是什么样的？"],
+    ["What's a movie you could watch with me over and over?", "有哪部电影你愿意和我反复看？"],
+    ["What's your favorite thing about our home?", "你最喜欢我们家的哪一点？"],
+    ["If you could have any superpower for a day, what would you choose?", "如果能拥有一天超能力，你会选哪一种？"],
+    ["What's a snack you always want to share with me?", "有什么零食你总想跟我分享？"],
+    ["What's the best meal we've had together?", "我们一起吃过最棒的一顿饭是什么？"],
+    ["What's your favorite season and why?", "你最喜欢哪个季节？为什么？"],
+    ["If we adopted a pet, what would we name it?", "如果我们养一只宠物，你会给它取什么名字？"],
+    ["What's a compliment you received recently that made you happy?", "最近有什么夸奖让你特别开心？"],
+    ["What's your favorite way to unwind after work?", "下班后你最喜欢怎么放松？"],
+    ["What's a game you'd love for us to play together?", "你希望我们一起玩什么游戏？"],
+    ["What's your favorite thing to do on a rainy day?", "雨天你最喜欢做什么？"],
+    ["If you could instantly learn any language, which would you pick?", "如果能瞬间学会一门语言，你会选哪种？"],
+    ["What's your favorite way I show you love?", "我用什么方式表达爱意，是你最喜欢的？"],
+    ["What's something small that made you laugh this week?", "这周有什么小事让你笑出声？"]
+  ]},
+  memory: { en: "Memory Lane", zh: "回忆往昔", cards: [
+    ["What was your first impression of me?", "你对我的第一印象是什么？"],
+    ["What's your favorite memory from our first date?", "我们第一次约会时，你最喜欢哪个瞬间？"],
+    ["When did you first realize you had feelings for me?", "你是什么时候第一次意识到自己喜欢上我的？"],
+    ["What's a moment early on when you knew this was serious?", "在早期，有哪个瞬间让你觉得这段关系是认真的？"],
+    ["What's your favorite trip we've taken together?", "我们一起去过最喜欢的一次旅行是哪次？"],
+    ["What's a challenge we faced together that made us stronger?", "我们一起面对过什么困难，让彼此变得更坚定？"],
+    ["What's the funniest thing that's happened to us as a couple?", "我们作为情侣发生过最搞笑的一件事是什么？"],
+    ["What's your favorite photo of us and why?", "你最喜欢我们的哪张合照？为什么？"],
+    ["What's a tradition we've built together that you love?", "我们一起建立的哪个小传统，是你很喜欢的？"],
+    ["What surprised you most about me when we started dating?", "我们刚开始交往时，我身上最让你意外的一点是什么？"],
+    ["What's a moment you wish we could relive?", "有没有一个瞬间，你希望我们能重新经历一次？"],
+    ["What's the most romantic thing I've ever done for you?", "我为你做过最浪漫的一件事是什么？"],
+    ["What's your favorite holiday we've celebrated together?", "我们一起过的哪个节日，你最喜欢？"],
+    ["What's a small gesture from me that you still remember?", "有什么我做过的小举动，你到现在还记得？"],
+    ["What was our first disagreement about, and how did we resolve it?", "我们第一次意见不合是因为什么？后来怎么解决的？"],
+    ["What's a milestone in our relationship you're proud of?", "我们感情中有哪个里程碑，让你感到骄傲？"],
+    ["What's your favorite inside joke between us?", "我们之间最喜欢的一个梗是什么？"],
+    ["What's the best gift I've given you?", "我送给你最好的礼物是什么？"],
+    ["What's a memory that still makes you laugh out loud?", "有哪段回忆现在想起来还会让你笑出声？"],
+    ["What's something we've overcome together?", "我们一起克服过什么困难？"],
+    ["What's your favorite thing about how we met?", "我们相识的过程中，你最喜欢哪一部分？"],
+    ["What's a moment when you felt truly understood by me?", "有哪个瞬间你感觉真正被我理解？"],
+    ["What's the most spontaneous thing we've ever done together?", "我们一起做过最随性、说走就走的事是什么？"],
+    ["What's a memory from our early days you'd want to tell our future kids or grandkids?", "我们早期的哪段回忆，你会想讲给未来的孩子或孙辈听？"],
+    ["What's the best piece of advice someone gave us as a couple?", "有没有人给过我们作为情侣最好的建议？"]
+  ]},
+  heart: { en: "Heart to Heart", zh: "走心对话", cards: [
+    ["What makes you feel most loved by me?", "我做什么事时，你最能感受到被爱？"],
+    ["What's something you need more of from me right now?", "最近你希望我多给你一些什么？"],
+    ["What's a fear you have that I could help you with?", "有什么担忧或恐惧，是我可以帮你面对的？"],
+    ["What's something you've never told me but want to share?", "有什么事你一直没告诉我，但想跟我分享？"],
+    ["How do you like to be comforted when you're stressed?", "压力大的时候，你希望怎样被安慰？"],
+    ["What's something about yourself you're still working on?", "关于自己，你还在努力改进的是什么？"],
+    ["What's a belief you hold that has changed over time?", "有什么想法或信念，是你随着时间改变的？"],
+    ["What does emotional safety look like to you?", "对你来说，\"情感上的安全感\"是什么样的？"],
+    ["What's a way I could support your dreams more?", "我可以怎样更好地支持你的梦想？"],
+    ["What's something you wish I understood better about you?", "有什么关于你的事，你希望我能更理解？"],
+    ["How do you know when I'm upset, even if I don't say it?", "就算我不说，你怎么看出我心情不好？"],
+    ["What's a value you never want us to compromise on?", "有什么价值观，是你希望我们绝不妥协的？"],
+    ["What's something from your childhood that shaped who you are today?", "童年的哪段经历，塑造了现在的你？"],
+    ["What's the hardest thing you've had to overcome?", "你克服过最艰难的一件事是什么？"],
+    ["What do you need from me during hard times?", "遇到困难时，你需要我为你做什么？"],
+    ["What's a strength of mine you admire?", "我身上有什么优点，是你很欣赏的？"],
+    ["What's something I do that helps you feel secure?", "我做什么事，会让你感到更有安全感？"],
+    ["What's a topic you wish we talked about more?", "有什么话题，你希望我们多聊聊？"],
+    ["What's a worry about our future you haven't voiced?", "关于未来，有什么担忧你还没说出口？"],
+    ["How can I be a better partner to you?", "我可以怎样成为一个更好的伴侣？"],
+    ["What does trust mean to you in our relationship?", "在我们的关系里，\"信任\"对你来说意味着什么？"],
+    ["What's a moment you felt truly proud of yourself?", "有哪个瞬间，你为自己感到骄傲？"],
+    ["What's something you're learning to forgive yourself for?", "有什么事，你正在学着原谅自己？"],
+    ["What's a way we could communicate better?", "我们可以怎样更好地沟通？"],
+    ["What do you need to hear from me more often?", "你希望我更常对你说什么？"]
+  ]},
+  romance: { en: "Romance", zh: "浪漫时刻", cards: [
+    ["What's your favorite way to be shown affection?", "你最喜欢用哪种方式被表达爱意？"],
+    ["What's the most romantic date you can imagine us having?", "你能想象的最浪漫的约会是什么样的？"],
+    ["Which love language do you feel most connected to?", "哪种爱的语言，最能让你感受到爱？"],
+    ["What's something I do that makes you feel desired?", "我做什么事，会让你觉得自己被渴望？"],
+    ["What's your favorite physical gesture of affection from me?", "我表达爱意的哪个肢体动作，是你最喜欢的？"],
+    ["What's a romantic gesture you've always wanted to try?", "有什么浪漫的举动，是你一直想尝试的？"],
+    ["What's your idea of the perfect anniversary?", "你心目中完美的纪念日是什么样的？"],
+    ["What's a compliment you'd love to hear from me more often?", "你希望我更常对你说哪句夸奖？"],
+    ["What's your favorite way we show love in public?", "在公开场合，我们表达爱意的哪种方式你最喜欢？"],
+    ["What song reminds you of us?", "哪首歌会让你想起我们？"],
+    ["What's a place you'd love to be kissed again for the \"first time\"?", "你希望在哪个地方，重新体验一次\"初吻\"的感觉？"],
+    ["What's your favorite pet name I call you?", "我叫你的哪个昵称，是你最喜欢的？"],
+    ["What's a romantic surprise you'd love for us to plan together?", "你希望我们一起策划什么浪漫的惊喜？"],
+    ["What's something about our chemistry you cherish?", "我们之间的哪种默契或吸引力，是你很珍惜的？"],
+    ["What's your favorite way to start the morning together?", "你最喜欢我们怎样一起开始新的一天？"],
+    ["What's a way you'd like us to reconnect after a busy week?", "忙碌一周后，你希望我们怎样重新连接彼此？"],
+    ["What's your favorite thing about our physical connection?", "我们之间的亲密感中，你最喜欢哪一点？"],
+    ["What's a love story, real or fictional, that reminds you of us?", "有哪个爱情故事（真实或虚构）让你想起我们？"],
+    ["What's your dream proposal or wedding moment?", "你梦想中的求婚或婚礼场景是什么样的？"],
+    ["What's a way I can make you feel more special day to day?", "在日常生活中，我可以怎样让你感觉更特别？"],
+    ["What's your favorite thing to whisper to each other?", "我们之间悄悄说的话里，你最喜欢哪句？"],
+    ["What's a date idea that would completely melt your heart?", "什么样的约会点子会让你心动不已？"],
+    ["What's your favorite way to end the day together?", "你最喜欢我们怎样一起结束一天？"],
+    ["What's something that always rekindles the spark between us?", "有什么事总能重新点燃我们之间的火花？"],
+    ["What's a small romantic ritual you'd like us to start?", "你希望我们开始一个怎样的小浪漫仪式？"]
+  ]},
+  future: { en: "Future & Goals", zh: "未来与目标", cards: [
+    ["Where do you see us in five years?", "你觉得五年后我们会是什么样子？"],
+    ["What's a shared goal you'd like us to work toward this year?", "今年你希望我们一起努力实现什么目标？"],
+    ["What's a dream you have for our future home?", "对于未来的家，你有什么梦想？"],
+    ["How do you imagine we'll spend our retirement?", "你想象中，我们退休后会怎么生活？"],
+    ["What's a financial goal you'd like us to set together?", "你希望我们一起设定什么财务目标？"],
+    ["What's a place you'd love for us to live someday?", "将来你希望我们能住在哪里？"],
+    ["What does success look like for our relationship?", "对你来说，我们这段关系\"成功\"是什么样子？"],
+    ["What's a tradition you'd like to start for our future family?", "你希望为未来的小家庭开创什么传统？"],
+    ["What's a skill you'd like us to learn together?", "你希望我们一起学习什么技能？"],
+    ["How many kids, if any, do you imagine us having, and why?", "你想象中我们会有几个孩子（如果有的话）？为什么？"],
+    ["What's a big adventure you'd love for us to take together?", "你希望我们一起经历怎样的一场大冒险？"],
+    ["What's something you hope never changes about us?", "关于我们，有什么是你希望永远不要改变的？"],
+    ["What's a career milestone you're working toward?", "你正在努力实现的事业里程碑是什么？"],
+    ["How do you want us to grow individually while staying close?", "你希望我们如何在各自成长的同时，仍保持亲密？"],
+    ["What's your vision of a perfect life together in 10 years?", "十年后，你理想中我们的生活是什么样子？"],
+    ["What's a legacy you'd like us to leave behind?", "你希望我们能留下怎样的印记或影响？"],
+    ["What's something you'd like us to prioritize more this year?", "今年你希望我们更重视什么事？"],
+    ["How do you imagine we'll handle disagreements as we grow older?", "你觉得随着年岁增长，我们会怎样处理分歧？"],
+    ["What's a habit you'd like us to build together?", "你希望我们一起养成什么习惯？"],
+    ["What does \"home\" mean to you in the future?", "对未来的你来说，\"家\"意味着什么？"],
+    ["What's a way we can keep growing closer as time passes?", "随着时间推移，我们可以怎样让彼此更亲近？"],
+    ["What's a personal growth goal you have for this year?", "今年你个人有什么成长目标？"],
+    ["What's something you want to make sure we never stop doing?", "有什么事，你希望我们永远不要停止去做？"],
+    ["How do you picture us celebrating our 25th anniversary?", "你想象中，我们的25周年纪念日会怎么庆祝？"],
+    ["What's one thing you want us to accomplish together before our next big birthday?", "在下一个重要生日之前，你希望我们一起完成什么事？"]
+  ]},
+  family: { en: "Family & Roots", zh: "家庭与成长", cards: [
+    ["What's a tradition from your family you want to continue with us?", "你家里有什么传统，是你想和我一起延续的？"],
+    ["What's your favorite childhood memory?", "你童年最喜欢的一段回忆是什么？"],
+    ["What did you learn about love from your parents?", "从父母身上，你学到了关于爱的什么道理？"],
+    ["What's something you'd like to do differently from how you were raised?", "有什么地方，你希望和自己被养育的方式不一样？"],
+    ["Who in your family has influenced you the most, and how?", "家人中谁对你影响最大？是怎样影响的？"],
+    ["What's a family recipe or dish that means a lot to you?", "有哪道家常菜或食谱，对你意义重大？"],
+    ["What's your favorite memory of a family gathering?", "你最喜欢的一次家庭聚会回忆是什么？"],
+    ["What's something you hope to teach any future kids of ours?", "如果我们将来有孩子，你希望教给他们什么？"],
+    ["What's a value from your upbringing you want to carry forward?", "成长过程中养成的哪种价值观，你希望延续下去？"],
+    ["What's your favorite thing about my family?", "我的家人身上，你最喜欢哪一点？"],
+    ["What's a family tradition you'd like us to create together?", "你希望我们一起创造什么家庭传统？"],
+    ["How did your parents show affection to each other?", "你父母之间是怎样表达感情的？"],
+    ["What's a lesson from your grandparents you still remember?", "祖辈教给你的哪个道理，你至今还记得？"],
+    ["What's something about your family you're proud of?", "关于你的家庭，有什么是你感到自豪的？"],
+    ["What's a challenge your family faced that shaped you?", "你的家庭经历过什么困难，塑造了现在的你？"],
+    ["What role do you hope extended family plays in our life?", "你希望双方的大家庭在我们生活中扮演怎样的角色？"],
+    ["What's your favorite holiday memory from childhood?", "童年时，哪个节日的回忆是你最喜欢的？"],
+    ["What's something you wish you had asked your parents before it was too late?", "有什么问题，你希望曾经趁早问过父母？"],
+    ["What's a family value you never want to compromise?", "有什么家庭价值观，是你绝不愿意妥协的？"],
+    ["How do you want to handle balancing both families during holidays?", "节日期间，你希望我们怎样平衡两边的家庭？"],
+    ["What's a story about your family you love to tell?", "有什么关于你家人的故事，是你很喜欢讲的？"],
+    ["What did your siblings (or being an only child) teach you?", "你的兄弟姐妹（或独生子女的经历）教会了你什么？"],
+    ["What's a piece of parenting advice you'd want to follow?", "有什么育儿建议，是你希望将来遵循的？"],
+    ["What's your fondest memory of a family celebration?", "你最珍视的一次家庭庆祝回忆是什么？"],
+    ["What does \"family\" mean to you at this point in your life?", "在人生的这个阶段，\"家庭\"对你来说意味着什么？"]
+  ]},
+  fun: { en: "Fun & Playful", zh: "趣味互动", cards: [
+    ["If we were a sitcom couple, what would our show be called?", "如果我们是情景喜剧里的情侣，剧名会叫什么？"],
+    ["Would you rather go on a spontaneous road trip or a carefully planned vacation?", "你更喜欢说走就走的自驾游，还是精心规划的旅行？"],
+    ["What's the silliest nickname you'd give me?", "你会给我取一个什么最搞笑的昵称？"],
+    ["If you could swap lives with me for a day, what would you do first?", "如果能和我互换生活一天，你会先做什么？"],
+    ["What's the weirdest food combination you secretly enjoy?", "你偷偷喜欢的最奇怪的食物搭配是什么？"],
+    ["Would you rather always have to sing your requests or always whisper them?", "你宁愿以后所有请求都要唱出来，还是都要小声耳语？"],
+    ["What's a talent you wish you had?", "你希望自己拥有什么才艺？"],
+    ["If our relationship had a theme song, what would it be?", "如果我们的感情要有一首主题曲，会是哪首？"],
+    ["What's the most embarrassing thing you've done to impress me?", "为了让我对你有好印象，你做过最尴尬的事是什么？"],
+    ["Would you rather be able to fly or be invisible?", "你更想拥有飞行能力，还是隐身能力？"],
+    ["What's your go-to karaoke song?", "你去KTV必点的歌是什么？"],
+    ["If we had a couple's Halloween costume, what should it be?", "如果我们要一起扮情侣万圣节装扮，你觉得该扮什么？"],
+    ["What's the funniest thing you've ever caught me doing?", "你曾撞见我做过最好笑的一件事是什么？"],
+    ["Would you rather never eat your favorite food again, or never watch your favorite show again?", "你宁愿再也不吃你最爱的食物，还是再也不看你最爱的剧？"],
+    ["What's a ridiculous fear you have?", "你有什么荒谬又莫名其妙的恐惧？"],
+    ["If you could instantly master a dance style, which one would you choose?", "如果能瞬间掌握一种舞蹈，你会选哪种？"],
+    ["What's the most competitive game we play together?", "我们一起玩的游戏里，哪个最能激发你的胜负欲？"],
+    ["Would you rather live without music or without movies?", "你宁愿生活里没有音乐，还是没有电影？"],
+    ["What's a costume or outfit you'd love to see me wear?", "你希望看到我穿什么造型或服装？"],
+    ["If we swapped chores for a week, which one would you dread the most?", "如果我们互换家务一周，你最不想接手的是哪一项？"],
+    ["What's the funniest name you could imagine for our future pet?", "你能想到我们未来宠物最搞笑的名字是什么？"],
+    ["Would you rather be too hot or too cold for the rest of your life?", "你宁愿余生一直感觉太热，还是一直感觉太冷？"],
+    ["What's a party trick you wish you could do?", "你希望自己会什么派对小才艺？"],
+    ["If you had to describe me in three emojis, what would they be?", "如果只能用三个表情符号形容我，你会选哪三个？"],
+    ["What's the silliest argument we've ever had?", "我们吵过最无厘头的一次架是因为什么？"]
+  ]},
+  values: { en: "Values & Life", zh: "价值观与生活", cards: [
+    ["What does a meaningful life look like to you?", "对你来说，怎样的人生才算有意义？"],
+    ["What's a cause or issue you care deeply about?", "有什么议题或事业，是你非常关心的？"],
+    ["What's something you believe strongly in, even if others disagree?", "有什么信念，即使别人不认同，你也坚信不疑？"],
+    ["How do you define happiness?", "你怎么定义\"幸福\"？"],
+    ["What's a habit that makes you feel like your best self?", "有什么习惯，能让你感觉自己处于最佳状态？"],
+    ["What role does faith or spirituality play in your life?", "信仰或精神层面的追求，在你生活中扮演什么角色？"],
+    ["What's a lesson life has taught you recently?", "最近生活教会了你什么道理？"],
+    ["What's something you'd like to change about the world?", "你希望这个世界能有什么改变？"],
+    ["How do you handle stress, and what helps you most?", "你通常怎么应对压力？什么方式对你最有效？"],
+    ["What's a personal boundary that's important to you?", "有什么个人界限，对你来说很重要？"],
+    ["What does work-life balance mean to you?", "\"工作与生活的平衡\"对你来说意味着什么？"],
+    ["What's something you value more now than you did five years ago?", "有什么东西，你现在比五年前更看重？"],
+    ["What's a piece of wisdom you live by?", "你一直奉行的一句人生智慧是什么？"],
+    ["How do you want to be remembered by others?", "你希望别人记住怎样的你？"],
+    ["What's something you're passionate about outside of our relationship?", "除了我们的感情，你还对什么充满热情？"],
+    ["What does self-care look like for you?", "对你来说，\"自我照顾\"是什么样子的？"],
+    ["What's a mistake that taught you an important lesson?", "有什么错误，教会了你重要的一课？"],
+    ["How important is community to you, and why?", "社群或圈子对你来说有多重要？为什么？"],
+    ["What's something you're currently learning about yourself?", "最近你对自己有什么新的认识？"],
+    ["What does generosity mean to you?", "\"慷慨\"这个词对你来说意味着什么？"],
+    ["What's a value you hope we instill in any children we might raise?", "如果将来我们抚养孩子，你希望灌输给他们什么价值观？"],
+    ["How do you define a good friend?", "你怎么定义\"一个好朋友\"？"],
+    ["What's something that always restores your energy?", "有什么事总能让你重新充满能量？"],
+    ["What's a principle you never want to break?", "有什么原则，是你绝不愿意打破的？"],
+    ["What does \"living well\" mean to you?", "\"过好这一生\"对你来说意味着什么？"]
+  ]}
+};
+
+const FELLOWSHIP_DECKS = {
+  icebreakers: { en: "Icebreakers", zh: "破冰暖场", cards: [
+    [`What's one word that describes how you're feeling this week?`, `用一个词形容你这周的心情，会是什么？`],
+    [`What's a small blessing from this past week?`, `过去一周里，有什么小小的祝福？`],
+    [`What's your favorite worship song right now?`, `你最近最喜欢的敬拜诗歌是什么？`],
+    [`If you could have coffee with any Bible character, who would it be?`, `如果能和圣经里的一位人物喝咖啡聊天，你会选谁？`],
+    [`What's something you're looking forward to this month?`, `这个月有什么事是你在期待的？`],
+    [`What's a dish you'd bring to a church potluck?`, `如果教会有聚餐，你会带哪道菜？`],
+    [`What's your favorite memory from a past cell group gathering?`, `你在小组聚会中最喜欢的一段回忆是什么？`],
+    [`What's one thing that made you smile today?`, `今天有什么事让你微笑？`],
+    [`If you could visit any place mentioned in the Bible, where would you go?`, `如果能去圣经中提到的任何地方，你会选哪里？`],
+    [`What's a hobby you've picked up recently?`, `最近你培养了什么新爱好？`],
+    [`What's your favorite season and why?`, `你最喜欢哪个季节？为什么？`],
+    [`What's a song, any genre, that's been stuck in your head this week?`, `这周有什么歌一直在你脑海里回响？`],
+    [`What's something new you tried this month?`, `这个月你尝试了什么新事物？`],
+    [`What's your comfort food after a long day?`, `忙碌一天后，你最想吃什么来治愈自己？`],
+    [`If you had a free Saturday, how would you spend it?`, `如果周六完全自由，你会怎么安排？`],
+    [`What's a movie or show that's encouraged you recently?`, `最近有什么电影或剧集给了你鼓励？`],
+    [`What's your favorite way to spend time with the fellowship outside of meetings?`, `除了聚会，你最喜欢和团契的弟兄姊妹一起做什么？`],
+    [`What's a childhood memory connected to church or Sunday school?`, `你有什么和教会或主日学有关的童年回忆？`],
+    [`What's your go-to drink order?`, `你点饮料时最常点什么？`],
+    [`What's something you're grateful for right now?`, `此刻你最感恩的一件事是什么？`],
+    [`If you could learn any skill instantly, what would it be?`, `如果能瞬间学会一项技能，你会选什么？`],
+    [`What's your favorite Bible story from childhood?`, `你童年最喜欢的圣经故事是什么？`],
+    [`What's a place you'd love to travel to?`, `你最想去旅行的地方是哪里？`],
+    [`What's one thing on your bucket list?`, `你的人生愿望清单上有什么？`],
+    [`What's your favorite time of day and why?`, `你最喜欢一天中的哪个时段？为什么？`],
+    [`What's a small win you had this week?`, `这周你有什么小小的胜利或成就？`],
+    [`What's something you've learned about yourself recently?`, `最近你对自己有什么新的认识？`],
+    [`What's your favorite way to relax after a busy week?`, `忙碌一周后，你最喜欢怎样放松？`],
+    [`If you could ask God one question right now, what would it be?`, `如果现在能问神一个问题，你会问什么？`],
+    [`What's something about this fellowship you're thankful for?`, `关于这个团契，有什么是你感恩的？`]
+  ]},
+  testimony: { en: "Faith Journey & Testimony", zh: "信仰历程与见证", cards: [
+    [`How did you first come to know Jesus?`, `你是怎样第一次认识耶稣的？`],
+    [`What's a moment when you felt God's presence clearly?`, `有哪个时刻，你清楚地感受到神的同在？`],
+    [`Who has been the biggest influence on your faith?`, `谁对你的信仰影响最大？`],
+    [`What's a Bible verse that changed the way you see God?`, `有哪节经文改变了你对神的看法？`],
+    [`What's a season of doubt you've walked through, and how did God meet you there?`, `你经历过怎样的怀疑季节？神当时如何与你相遇？`],
+    [`What's a turning point in your walk with God?`, `在你与神同行的路上，有什么转折点？`],
+    [`How has your understanding of grace changed over time?`, `你对"恩典"的理解，随着时间有怎样的改变？`],
+    [`What's a prayer God answered in a way you didn't expect?`, `有哪个祷告，神以出乎你意料的方式回应了？`],
+    [`What's something about God's character you've come to appreciate more?`, `关于神的性情，有什么是你越来越珍惜的？`],
+    [`How did your family shape, or not shape, your early faith?`, `你的家庭如何塑造（或没有塑造）你早期的信仰？`],
+    [`What's a moment you felt far from God, and how did you find your way back?`, `有哪个时刻你感觉离神很远？后来你是怎样回转的？`],
+    [`What's a testimony from someone else that encouraged your own faith?`, `有谁的见证曾经鼓励了你的信心？`],
+    [`How has your relationship with God changed in the past year?`, `过去一年，你与神的关系有什么变化？`],
+    [`What's a lie about God you once believed, and what's true instead?`, `你曾经相信过关于神的哪个谎言？真相是什么？`],
+    [`What's a Scripture that has carried you through a hard season?`, `有哪节经文支撑你走过艰难的季节？`],
+    [`What's a decision in which you saw God's providence guide you clearly?`, `有哪个决定，让你清楚看见神的护理引导你？`],
+    [`How did you experience God's faithfulness this past year?`, `过去一年，你如何经历神的信实？`],
+    [`What's a habit or practice that's deepened your faith?`, `有什么习惯或操练，加深了你的信仰？`],
+    [`What's something you used to struggle to believe about God that you now hold onto?`, `以前你难以相信关于神的什么事，现在却深信不疑？`],
+    [`Who in the Bible do you relate to most, and why?`, `圣经中你最能感同身受的人物是谁？为什么？`],
+    [`What's a moment you experienced God's peace in the middle of chaos?`, `有哪个时刻，你在混乱中经历了神的平安？`],
+    [`How has baptism or a faith milestone shaped your journey?`, `受洗或某个信仰里程碑，如何塑造了你的信仰历程？`],
+    [`What's a time God provided for you in an unexpected way?`, `有哪次神以意想不到的方式供应了你？`],
+    [`What's something you're still working through in your faith?`, `在信仰上，你目前还在努力面对的是什么？`],
+    [`What's a sermon or teaching that reshaped how you live?`, `有哪篇信息或教导，重塑了你的生活方式？`],
+    [`How has prayer changed your life?`, `祷告怎样改变了你的生命？`],
+    [`What's a moment you felt God's forgiveness in a tangible way?`, `有哪个时刻，你实实在在地感受到神的赦免？`],
+    [`What's a gift the church has recognized in you through your service?`, `透过你的服事，教会曾看见并肯定你身上的什么恩赐？`],
+    [`What's one thing you'd tell your younger self about faith?`, `关于信仰，你想对年轻时的自己说什么？`],
+    [`What's your favorite name or title for God, and why?`, `你最喜欢神的哪个名字或称号？为什么？`]
+  ]},
+  scripture: { en: "Scripture & Reflection", zh: "读经与默想", cards: [
+    [`What Bible verse are you meditating on this week?`, `这周你在默想哪节经文？`],
+    [`What's a passage of Scripture you keep coming back to?`, `有哪段经文，是你一再回去思想的？`],
+    [`What's a book of the Bible you'd love to study more deeply?`, `你希望更深入研读圣经中的哪一卷书？`],
+    [`What's a parable of Jesus that challenges you the most?`, `耶稣的哪个比喻最挑战你？`],
+    [`What's a Psalm that speaks to how you're feeling right now?`, `有哪篇诗篇，正说出你现在的心情？`],
+    [`What's a promise in Scripture you're holding onto?`, `你正抓住圣经中的哪个应许？`],
+    [`What's a command in Scripture that's hard for you to obey?`, `圣经中的哪条命令，对你来说很难遵行？`],
+    [`What's a story in the Old Testament that has new meaning for you now?`, `旧约中的哪个故事，现在对你有了新的意义？`],
+    [`What's your favorite name of Jesus, and why?`, `你最喜欢耶稣的哪个名字？为什么？`],
+    [`What's a verse about God's love that comforts you?`, `有哪节讲述神之爱的经文，给你带来安慰？`],
+    [`What's something you learned from Sunday's sermon or teaching?`, `从主日的信息或教导中，你学到了什么？`],
+    [`What's a question you have about a passage of Scripture?`, `对某段经文，你有什么疑问？`],
+    [`What's a verse you'd want to memorize this month?`, `这个月你想背诵哪节经文？`],
+    [`What's a Scripture that has shaped how you treat others?`, `有哪节经文塑造了你待人的方式？`],
+    [`What's your favorite miracle of Jesus, and what does it teach you?`, `你最喜欢耶稣行的哪个神迹？它教会了你什么？`],
+    [`What's a proverb that's guided a decision you made?`, `有哪句箴言，指引过你做出的一个决定？`],
+    [`What's a passage about suffering that has helped you?`, `有哪段关于受苦的经文，曾经帮助过你？`],
+    [`What's your favorite epistle (letter) in the New Testament, and why?`, `你最喜欢新约中的哪封书信？为什么？`],
+    [`What's a Scripture that challenges how you view money or possessions?`, `有哪节经文，挑战了你对金钱或财物的看法？`],
+    [`What's a story of a flawed Bible character that gives you hope?`, `哪位有缺点的圣经人物的故事，给了你盼望？`],
+    [`What's your favorite attribute of God revealed in Scripture?`, `圣经中启示的神的属性，你最喜欢哪一个？`],
+    [`What's a verse about identity in Christ that you hold onto?`, `关于"在基督里的身份"，你紧抓着哪节经文？`],
+    [`What's a passage on forgiveness that's impacted you?`, `有哪段关于饶恕的经文，深深影响了你？`],
+    [`What's a Scripture you've seen come alive in your own life?`, `有哪节经文，在你自己的生命中"活了过来"？`],
+    [`What's a lesson from the life of David, or another Bible figure, that stands out to you?`, `大卫（或其他圣经人物）的生平，给你留下什么深刻的功课？`],
+    [`What's your favorite Beatitude, and why?`, `你最喜欢登山宝训中的哪一条福？为什么？`],
+    [`What's a verse about hope that you cling to?`, `你紧紧抓住的、关于盼望的经文是哪一节？`],
+    [`What's something the fruit of the Spirit, Galatians 5, challenges you to grow in?`, `圣灵的果子（加拉太书5章）中，挑战你要多多成长的是哪一项？`],
+    [`What's a passage on community that shapes how you see fellowship?`, `有哪段关于团契群体的经文，塑造了你对团契的看法？`],
+    [`What's one verse you'd want our whole cell group to memorize together?`, `你希望我们整个小组一起背诵哪节经文？`]
+  ]},
+  prayer: { en: "Prayer Life", zh: "祷告生活", cards: [
+    [`What does your daily prayer time look like?`, `你每天的祷告时间大概是怎样的？`],
+    [`What's a prayer you've been praying for a while without an answer yet?`, `有什么祷告，你已经祷告了一段时间还没得到答案？`],
+    [`What's a specific way we can pray for you this week?`, `这周你希望我们具体为你祷告什么？`],
+    [`What's an answered prayer that strengthened your faith?`, `有哪个蒙应允的祷告，坚固了你的信心？`],
+    [`Who's someone you regularly pray for?`, `你经常为谁祷告？`],
+    [`What's something you find hard about praying?`, `祷告中，有什么是你觉得困难的？`],
+    [`What's a creative way you like to pray, like journaling, walking, or singing?`, `你喜欢用怎样有创意的方式祷告（如写祷告日记、边走边祷、唱诗祷告）？`],
+    [`What's a prayer request you've been carrying that you haven't shared yet?`, `有什么代祷事项，你一直放在心里还没有分享？`],
+    [`What's something you want to thank God for today?`, `今天你想为什么感谢神？`],
+    [`How has praying with others changed your prayer life?`, `和别人一起祷告，怎样改变了你的祷告生活？`],
+    [`What's a burden on your heart that you'd like this group to pray over?`, `你心里有什么重担，希望小组为你祷告？`],
+    [`What's a time God answered your prayer in a surprising way?`, `有哪次神以令你惊讶的方式回应了你的祷告？`],
+    [`What's a person or situation in the world you feel led to pray for?`, `你觉得神感动你要为哪个人或哪件事代祷？`],
+    [`What's something you're praying for our fellowship or church?`, `你在为我们的团契或教会祷告什么？`],
+    [`How do you pray when you don't know what to say?`, `当你不知道该说什么时，你是怎样祷告的？`],
+    [`What's a verse about prayer that encourages you?`, `有哪节关于祷告的经文鼓励了你？`],
+    [`What's a prayer habit you'd like to build this year?`, `今年你想建立怎样的祷告习惯？`],
+    [`What's something you've been praying for that requires patience?`, `有什么祷告事项，需要你更多的耐心等候？`],
+    [`How does worship music shape your prayer life?`, `敬拜音乐怎样影响你的祷告生活？`],
+    [`What's a time silence or stillness helped you connect with God?`, `有哪次安静独处的时刻，帮助你与神更亲近？`],
+    [`What's a prayer for someone in this group that's on your heart right now?`, `此刻你心里有什么想为小组中某人祷告的事？`],
+    [`What's something you want to surrender to God in prayer today?`, `今天在祷告中，你想把什么交托给神？`],
+    [`What's a fear you'd like prayer for?`, `有什么惧怕，你希望得到代祷？`],
+    [`What's a dream or hope you'd like this group to pray into?`, `有什么梦想或盼望，你希望小组一起为你祷告？`],
+    [`How has fasting, if you've tried it, shaped your prayer life?`, `如果你曾禁食祷告，这怎样塑造了你的祷告生活？`],
+    [`What's a prayer of gratitude you'd like to share?`, `有什么感恩的祷告，你想分享？`],
+    [`What's a relationship you'd like prayer for?`, `有什么关系，你希望得到代祷？`],
+    [`What's something you're asking God for wisdom about right now?`, `此刻你在为哪件事向神祈求智慧？`],
+    [`What's a prayer for healing, physical, emotional, or spiritual, that's on your heart?`, `你心里有什么关于医治（身体、情感或灵性）的祷告？`],
+    [`How can we pray for your family this week?`, `这周我们可以怎样为你的家人祷告？`]
+  ]},
+  trials: { en: "Trials & Struggles", zh: "困难与挣扎", cards: [
+    [`What's a challenge you're currently facing that you'd feel comfortable sharing?`, `目前你正面对什么挑战，是你愿意分享的？`],
+    [`How has God met you in a season of suffering?`, `在受苦的季节里，神是怎样与你同在的？`],
+    [`What's a struggle you've overcome with God's help?`, `靠着神的帮助，你曾克服过什么挣扎？`],
+    [`What's something weighing on your heart right now?`, `此刻有什么事压在你心头？`],
+    [`How do you usually respond when life feels overwhelming?`, `当生活让你感到不堪重负时，你通常怎样应对？`],
+    [`What's a fear you're wrestling with?`, `你正在与什么恐惧搏斗？`],
+    [`What's something you're anxious about that you'd like to release to God?`, `有什么让你焦虑的事，你想交托给神？`],
+    [`What's a loss you've experienced that shaped your faith?`, `你经历过怎样的失去，塑造了你的信仰？`],
+    [`How has this fellowship supported you through a hard time?`, `在艰难的时候，这个团契怎样支持了你？`],
+    [`What's a lesson you've learned through a difficult season?`, `在困难的季节中，你学到了什么功课？`],
+    [`What's something you're finding hard to trust God with right now?`, `此刻有什么事，是你觉得很难交托给神信靠的？`],
+    [`How do you process disappointment when prayers aren't answered the way you hoped?`, `当祷告没有按你所盼望的方式得到回应时，你怎样处理失望？`],
+    [`What's a relationship struggle you're navigating?`, `你目前正在面对怎样的关系挣扎？`],
+    [`What's a health concern, yours or a loved one's, you'd like support for?`, `你自己或所爱之人，有什么健康问题需要支持？`],
+    [`What's a work or financial pressure you're facing?`, `你正面对什么工作或经济上的压力？`],
+    [`How do you find rest when you're exhausted?`, `当你精疲力竭时，怎样找到安息？`],
+    [`What's a temptation you're currently fighting against?`, `你目前正在抵挡什么试探？`],
+    [`What's something you're grieving right now?`, `此刻有什么事让你在哀伤中？`],
+    [`How has community helped carry a burden you couldn't carry alone?`, `团契怎样帮你分担了一个你无法独自承受的重担？`],
+    [`What's a wound from the past you're still healing from?`, `过去有什么伤痛，你仍在疗愈中？`],
+    [`What's something you're learning about God's faithfulness through a hard time?`, `透过艰难的时期，你对神的信实有什么新的领悟？`],
+    [`What's a decision you're struggling to make?`, `有什么决定，是你现在很难做出的？`],
+    [`How do you keep your faith steady when circumstances are uncertain?`, `当环境不确定时，你怎样保持信心的稳固？`],
+    [`What's a way this group could practically support you this season?`, `这个季节，小组可以怎样实际地支持你？`],
+    [`What's something you wish someone had told you during a past hardship?`, `过去经历困难时，你希望有人曾告诉你什么？`],
+    [`What's a habit that helps you cope in stressful seasons?`, `在压力大的季节，有什么习惯能帮助你？`],
+    [`What's a Scripture that's helped you through suffering?`, `有哪节经文帮助你走过苦难？`],
+    [`How has your view of God changed through a trial you've faced?`, `透过你所面对的试炼，你对神的看法有什么改变？`],
+    [`What's something you need permission to feel or express right now?`, `此刻有什么感受，是你需要被允许去表达的？`],
+    [`What's one small step of hope you can take this week?`, `这周你可以迈出哪一小步充满盼望的行动？`]
+  ]},
+  community: { en: "Community & Relationships", zh: "团契与关系", cards: [
+    [`What does this fellowship mean to you?`, `这个团契对你来说意味着什么？`],
+    [`What's something you appreciate about someone in this group?`, `小组中有谁，让你特别欣赏他/她的什么？`],
+    [`How has this cell group helped you grow spiritually?`, `这个小组怎样帮助了你灵命上的成长？`],
+    [`What's a way you'd like to serve or bless someone in this group?`, `你希望怎样服事或祝福小组中的某个人？`],
+    [`What's a friendship in your life that reflects Christ's love?`, `你生命中有哪段友谊，反映出基督的爱？`],
+    [`How do you show love to others practically?`, `你在实际生活中怎样向他人表达爱？`],
+    [`What's a conflict you resolved in a way that honored God?`, `你曾以怎样荣耀神的方式化解过一次冲突？`],
+    [`What's something you value about accountability in relationships?`, `在关系中的"彼此督责"，你看重的是什么？`],
+    [`How do you want to grow as a friend this year?`, `今年你希望在"作朋友"这件事上怎样成长？`],
+    [`What's a way this group has felt like family to you?`, `这个小组在哪些方面让你感觉像家人一样？`],
+    [`What's something you've learned about forgiveness from a relationship?`, `从某段关系中，你学到了关于饶恕的什么功课？`],
+    [`How do you balance honesty and grace with people you love?`, `对你所爱的人，你怎样平衡诚实与恩典？`],
+    [`What's a way you'd like to be a better encourager to others?`, `你希望怎样成为更好的鼓励者？`],
+    [`What's a relationship in your life you're praying for restoration in?`, `你生命中有哪段关系，是你正在为其修复祷告的？`],
+    [`How do you practice hospitality in your life?`, `你在生活中怎样实践"款待"（好客）？`],
+    [`What's something you appreciate about your church community?`, `你的教会群体中，有什么是你很珍惜的？`],
+    [`What's a way you can reach out to someone who feels isolated?`, `你可以怎样去关心一个感到孤单的人？`],
+    [`How do you handle disagreements within the fellowship?`, `在团契中出现意见分歧时，你会怎样处理？`],
+    [`What's a mentor or spiritual friend who has shaped you?`, `有哪位属灵导师或朋友塑造了你？`],
+    [`What's a way you can be a light to a non-believing friend or family member?`, `你可以怎样成为未信主的朋友或家人生命中的光？`],
+    [`What's something you're learning about loving people who are different from you?`, `关于爱那些与你不同的人，你正在学习什么？`],
+    [`How do you make time for community amid a busy schedule?`, `在忙碌的日程中，你怎样为团契生活腾出时间？`],
+    [`What's a way you'd like this group to grow closer this year?`, `今年你希望这个小组在哪方面更加亲密？`],
+    [`What's a memory of this group that encouraged you?`, `小组的哪段回忆曾鼓励过你？`],
+    [`What's something you want the newer members of this group to feel welcomed into?`, `你希望新加入小组的成员，能感受到怎样的欢迎？`],
+    [`How do you extend grace to someone who's hurt you?`, `对伤害过你的人，你怎样给予恩典？`],
+    [`What's a way you can support a fellow believer who's struggling?`, `你可以怎样支持一位正在挣扎中的肢体？`],
+    [`What's something you're thankful for about the people in this room?`, `对在座的这些人，你有什么感恩的？`],
+    [`How has someone in this group encouraged your faith recently?`, `最近小组中有谁鼓励了你的信心？`],
+    [`What's a way we can pray for and support one another this month?`, `这个月我们可以怎样彼此代祷、彼此支持？`]
+  ]},
+  growth: { en: "Growth & Discipleship", zh: "成长与门训", cards: [
+    [`What's a spiritual discipline you'd like to grow in this year?`, `今年你希望在哪项属灵操练上成长？`],
+    [`What's something you're currently learning in your walk with God?`, `在与神同行的路上，你目前正在学习什么？`],
+    [`What's a habit you'd like to build to draw closer to God?`, `你想建立什么习惯来更亲近神？`],
+    [`What's an area of your character you'd like to grow in?`, `你希望在品格上的哪个方面成长？`],
+    [`What's a fruit of the Spirit — love, joy, peace, patience, and so on — you're focusing on?`, `圣灵的果子（仁爱、喜乐、和平、忍耐等）中，你目前专注在哪一项？`],
+    [`What's something you've learned from a mentor or older believer?`, `从属灵导师或年长的信徒身上，你学到了什么？`],
+    [`How do you make time for personal devotion in your daily life?`, `在日常生活中，你怎样为个人灵修留出时间？`],
+    [`What's a book, besides the Bible, that has shaped your faith?`, `除了圣经，还有哪本书塑造了你的信仰？`],
+    [`What's a gift you're learning to steward for the body of Christ?`, `你正在学习怎样善用哪项恩赐来建造基督的身体？`],
+    [`What's an area of sin or weakness you're actively working against?`, `有什么罪或软弱，是你正在努力对抗的？`],
+    [`What's a step of obedience God has asked of you recently?`, `最近神要求你迈出怎样顺服的一步？`],
+    [`What's something you're learning about surrender to God's will?`, `关于顺服神的旨意，你正在学习什么？`],
+    [`What's a goal you have for your spiritual growth this year?`, `今年你在灵命成长上有什么目标？`],
+    [`What's an area of discipline, like finances, time, or health, you're inviting God into?`, `有哪个自律的领域（如理财、时间管理、健康），是你邀请神一同参与的？`],
+    [`How has journaling or writing helped your spiritual growth?`, `写灵修日记或文字记录，怎样帮助了你的灵命成长？`],
+    [`What's something you're learning about humility?`, `关于谦卑，你正在学习什么？`],
+    [`What's a way you'd like to grow in sharing your faith with others?`, `你希望在"向他人传福音"这件事上怎样成长？`],
+    [`What's a habit from someone you admire that you'd like to adopt?`, `你欣赏的人身上，有什么习惯是你想效法的？`],
+    [`What's something you're learning about patience in God's timing?`, `关于等候神的时间，你正在学习什么？`],
+    [`What's a way fasting or simplicity has shaped your growth?`, `禁食或简朴生活，怎样塑造了你的成长？`],
+    [`What's a lesson on stewardship you've learned recently?`, `最近关于"管家职分"（好好管理神所赐的），你学到了什么功课？`],
+    [`What's an area where you feel spiritually stagnant, and what might help?`, `有哪个方面你觉得灵命停滞不前？什么可能会有帮助？`],
+    [`What's something you're learning about hearing God through His Word?`, `关于透过神的话语聆听祂，你正在学习什么？`],
+    [`What's a way you want to grow in generosity this year?`, `今年你希望在"慷慨"这件事上怎样成长？`],
+    [`What's a truth about your identity in Christ you're learning to believe?`, `关于"在基督里的身份"，你正在学习相信哪个真理？`],
+    [`What's a way this group can help hold you accountable?`, `小组可以怎样帮助你在生命中彼此督责？`],
+    [`What's something you're learning about rest and Sabbath?`, `关于安息日与休息，你正在学习什么？`],
+    [`What's a way you're learning to trust God more with control?`, `你正在学习怎样把"掌控权"更多交托给神？`],
+    [`What's a discipleship relationship — mentoring someone or being mentored — that's shaped you?`, `有哪段门训关系（无论是带领别人或被带领），塑造了你？`],
+    [`What's one next step you sense God inviting you to take?`, `你感觉神正邀请你迈出的下一步是什么？`]
+  ]},
+  service: { en: "Service & Calling", zh: "事奉与呼召", cards: [
+    [`What's a way you currently serve in church or your community?`, `你目前在教会或社区中怎样服事？`],
+    [`What's a ministry or cause you feel passionate about?`, `有什么事工或事业，是你充满热忱的？`],
+    [`What's an area of service where your gifts and the church's needs seem to line up?`, `有什么服事领域，是你的恩赐与教会的需要似乎相符的？`],
+    [`What's a gift or talent you'd like to use to serve others?`, `你希望用什么恩赐或才能来服事他人？`],
+    [`What's a time serving others blessed you unexpectedly?`, `有哪次服事他人的经历，出乎意料地祝福了你自己？`],
+    [`What's a way you'd like to serve this fellowship more this year?`, `今年你希望怎样更多地服事这个团契？`],
+    [`What's a mission or outreach experience that shaped you?`, `有什么宣教或外展经历塑造了你？`],
+    [`What's something you'd like to learn to serve more effectively?`, `你想学习什么，以便更有效地服事？`],
+    [`How do you discern what God is calling you to do?`, `你怎样分辨神呼召你去做的事？`],
+    [`What's a way your workplace or daily life can be an act of service to God?`, `你的职场或日常生活，可以怎样成为对神的一种服事？`],
+    [`What's a need in your community you feel drawn to meet?`, `在你的社区中，有什么需要是你感觉被感动要去回应的？`],
+    [`What's a fear that holds you back from stepping into service?`, `有什么恐惧，让你在踏入服事时却步？`],
+    [`What's a small act of service that made a big impact on someone?`, `有哪次小小的服事举动，对某人产生了很大的影响？`],
+    [`What's a way you can use your career or skills for God's kingdom?`, `你可以怎样把自己的职业或技能用在神的国度上？`],
+    [`What's something you've learned about servanthood from Jesus' example?`, `从耶稣的榜样中，你学到了关于"作仆人"的什么功课？`],
+    [`What's an area of ministry you'd like to explore or try?`, `有什么事工领域，是你想去探索或尝试的？`],
+    [`What's a way you can encourage someone who serves quietly and often goes unnoticed?`, `你可以怎样鼓励一位默默服事、常被忽略的弟兄姊妹？`],
+    [`What's a step you can take this month toward a calling affirmed by your gifts and the church's counsel?`, `针对蒙教会印证、且与你恩赐相符的呼召，这个月你可以迈出怎样的一步？`],
+    [`What's something you're learning about serving with the right heart, not for recognition?`, `关于以正确的心志服事，而非为了被人看见，你正在学习什么？`],
+    [`What's a way you've seen God use your weakness for His glory?`, `你曾怎样经历神使用你的软弱来彰显祂的荣耀？`],
+    [`What's a cause — justice, poverty, missions — that stirs your heart?`, `有什么议题（公义、贫穷、宣教等）触动了你的心？`],
+    [`What's a way you'd like to invest in the next generation?`, `你希望怎样在下一代身上投资？`],
+    [`What's something you're praying about regarding your vocation or career?`, `关于你的职业或呼召，你正在祷告什么？`],
+    [`What's a way this fellowship can serve the wider church or community together?`, `这个团契可以怎样一起服事更广泛的教会或社区？`],
+    [`What's a person you feel called to reach out to or disciple?`, `你感觉被呼召去接触或带领的人是谁？`],
+    [`What's something you've learned about balancing rest and service?`, `关于平衡休息与服事，你学到了什么？`],
+    [`What's a way God has equipped you that surprised you?`, `神怎样装备了你，让你感到意外？`],
+    [`What's a ministry team or role you'd like to try this year?`, `今年你想尝试哪个事工团队或岗位？`],
+    [`What's something you'd like to give more of — time, money, or talent — this season?`, `这个季节，你想在时间、金钱或才能上多多摆上？`],
+    [`What's one way you can serve someone in this room this month?`, `这个月你可以怎样服事在座的某一位？`]
+  ]},
+  gratitude: { en: "Gratitude & Worship", zh: "感恩与敬拜", cards: [
+    [`What's one thing you're most thankful for today?`, `今天你最感恩的一件事是什么？`],
+    [`What's a worship song that always draws you closer to God?`, `有哪首敬拜诗歌总能让你更亲近神？`],
+    [`What's an answered prayer you want to give thanks for?`, `有什么蒙应允的祷告，是你想感谢神的？`],
+    [`What's something about creation that reminds you of God's greatness?`, `受造之物中，有什么让你想起神的伟大？`],
+    [`What's a blessing in your life you sometimes take for granted?`, `生活中有什么祝福，是你有时会视为理所当然的？`],
+    [`What's a way you like to worship outside of Sunday service?`, `除了主日崇拜，你还喜欢用怎样的方式敬拜？`],
+    [`What's a moment this week you felt God's goodness?`, `这周有哪个时刻，你感受到神的美善？`],
+    [`What's an attribute of God you're most thankful for right now?`, `此刻你最感恩神的哪个属性？`],
+    [`What's a person in your life you're grateful for?`, `你生命中有谁，是你心存感恩的？`],
+    [`What's a hard season you can now look back on with gratitude?`, `有哪个艰难的季节，你现在能带着感恩回顾？`],
+    [`What's a simple pleasure that fills you with thankfulness?`, `有什么简单的小事，能让你充满感恩？`],
+    [`What's a hymn or worship song with lyrics that speak deeply to you?`, `有哪首诗歌的歌词，深深打动了你？`],
+    [`What's something about your church family you're grateful for?`, `关于你的教会大家庭，你感恩的是什么？`],
+    [`What's a provision from God, big or small, you're thankful for this month?`, `这个月神给你的供应（无论大小），有什么是你感恩的？`],
+    [`How does gratitude change the way you face difficulty?`, `感恩的心怎样改变你面对困难的方式？`],
+    [`What's a way you express worship through your daily work or life?`, `你怎样透过日常的工作或生活来表达敬拜？`],
+    [`What's a Psalm of praise that resonates with you?`, `有哪篇赞美的诗篇，特别打动你？`],
+    [`What's something in nature that makes you want to worship?`, `大自然中有什么，会让你想要敬拜神？`],
+    [`What's a moment of unexpected joy you experienced recently?`, `最近有哪个意外的喜乐时刻？`],
+    [`What's something about your own life story you're thankful God authored?`, `关于你自己的人生故事，有什么是你感谢神亲自书写的？`],
+    [`What's a talent or ability you're thankful God gave you?`, `有什么才能或能力，是你感谢神赐给你的？`],
+    [`What's a way this group has been a blessing to you?`, `这个小组在哪些方面成为了你的祝福？`],
+    [`What's something you took for granted until you almost lost it?`, `有什么事，你曾视为理所当然，直到差点失去才懂得珍惜？`],
+    [`What's a worship posture — singing, silence, dance, art — that helps you connect with God?`, `有什么敬拜的方式（唱诗、静默、舞蹈、艺术创作等）能帮助你与神连结？`],
+    [`What's a memory of worship, corporate or personal, that stays with you?`, `有哪段敬拜的回忆（集体或个人的），一直留在你心里？`],
+    [`What's a way you can cultivate more gratitude in your daily routine?`, `你可以怎样在日常生活中培养更多的感恩之心？`],
+    [`What's a testimony of provision you'd like to share?`, `有什么关于神供应的见证，是你想分享的？`],
+    [`What's something about your family you're thankful for?`, `关于你的家人，你感恩的是什么？`],
+    [`What's a way this past year has grown your thankfulness to God?`, `过去一年，怎样增长了你对神的感恩之心？`],
+    [`What's one thing you want to praise God for right now, out loud?`, `此刻你想大声赞美神的一件事是什么？`]
+  ]},
+  vision: { en: "Vision & Future Walk", zh: "异象与未来的信仰之路", cards: [
+    [`What's a hope you have for your faith in the next year?`, `对未来一年的信仰生活，你有什么盼望？`],
+    [`What's a Scripture or promise you're standing on for your future?`, `关于未来，你正站立在哪节经文或应许上？`],
+    [`What's a hope for your future that's shaped by Scripture's promises?`, `有什么关于未来的盼望，是被圣经的应许所塑造的？`],
+    [`What's a way you'd like to see this fellowship grow?`, `你希望这个团契在哪方面成长？`],
+    [`What's a legacy of faith you'd like to leave for future generations?`, `你希望为下一代留下怎样的信仰传承？`],
+    [`What's a spiritual milestone you're working toward this year?`, `今年你正朝着哪个灵命里程碑努力？`],
+    [`What's a way you'd like to grow closer to God this coming season?`, `在接下来的这个季节，你希望怎样更亲近神？`],
+    [`What's a vision you have for your family's faith?`, `对于家人的信仰，你有怎样的异象？`],
+    [`What's something you hope to be true of your walk with God in five years?`, `五年后，你希望自己与神同行的光景是怎样的？`],
+    [`What's a way you'd like to see God move in your church or community?`, `你希望看到神怎样在你的教会或社区中动工？`],
+    [`What's a step of faith you sense God inviting you to take soon?`, `你感觉神正邀请你不久后迈出怎样一步信心的行动？`],
+    [`What's a prayer for revival or renewal you carry for your generation?`, `为你这一代人，你心里有什么关于复兴或更新的祷告？`],
+    [`What's a way you want to grow in boldness for your faith?`, `你希望在为信仰勇敢站立这件事上怎样成长？`],
+    [`What's something you hope God teaches you this year?`, `今年你盼望神教导你什么？`],
+    [`What's a way you'd like to disciple or mentor someone in the future?`, `未来你希望怎样带领或牧养某个人？`],
+    [`What's a country, people group, or cause you feel called to pray for or support?`, `有哪个国家、族群或事工，是你感觉被呼召去代祷或支持的？`],
+    [`What's a way you want your faith to shape your career or life choices ahead?`, `你希望信仰怎样塑造你未来的职业或人生选择？`],
+    [`What's something about eternity that gives you hope for today?`, `关于永恒，有什么给了你今天活下去的盼望？`],
+    [`What's a way you'd like this cell group to impact your neighborhood or workplace?`, `你希望这个小组怎样影响你的邻里或职场？`],
+    [`What's a habit you want to establish now that will shape your faith for decades?`, `你想现在就建立什么习惯，来塑造未来数十年的信仰？`],
+    [`What's a way you want to grow in love for people who don't know Christ?`, `你希望在爱那些还不认识基督的人这件事上怎样成长？`],
+    [`What's a vision you have for your marriage or future family's faith life?`, `对于婚姻或未来家庭的信仰生活，你有怎样的异象？`],
+    [`What's something you want to be remembered for in your walk with God?`, `在你与神同行的路上，你希望自己被人记住的是什么？`],
+    [`What's a way you'd like to see unity grow within this fellowship?`, `你希望看到团契中的合一，在哪方面成长？`],
+    [`What's a step you can take this year to grow the next generation of believers?`, `今年你可以采取什么行动，来培育下一代的信徒？`],
+    [`What's a hope you have for how this group will look back on this season together?`, `你希望这个小组将来会怎样回顾这个共同经历的季节？`],
+    [`What's a way you sense God preparing you for something ahead?`, `你感觉神正怎样预备你，去迎接前面的事？`],
+    [`What's a prayer you're praying for the church at large?`, `对于普世教会，你正祷告什么？`],
+    [`What's something you want to trust God for boldly this year?`, `今年你想大胆地为哪件事信靠神？`],
+    [`What's one word of encouragement you'd give this group as we look toward the future together?`, `展望未来时，你想给这个小组一句怎样的鼓励？`]
+  ]}
+};
+
+const FRIENDS_DECKS = {
+  icebreakers: { en: "Icebreakers & Quirky Basics", zh: "破冰与古怪小事", cards: [
+    [`What's your most-used emoji?`, `你最常用的表情符号是什么？`],
+    [`What's a weird talent you have?`, `你有什么奇怪的小才能？`],
+    [`What's your phone lock screen right now?`, `你现在的手机锁屏壁纸是什么？`],
+    [`What's the last thing you googled?`, `你最近一次用谷歌搜索的是什么？`],
+    [`What's a smell that instantly makes you nostalgic?`, `有什么味道能瞬间让你怀旧？`],
+    [`What's your go-to karaoke song?`, `你去KTV必点的歌是什么？`],
+    [`What's the most useless fact you know?`, `你知道的最没用的冷知识是什么？`],
+    [`Can you do anything cool with your non-dominant hand?`, `你用非惯用手能做什么厉害的事吗？`],
+    [`What's a food you refuse to eat?`, `有什么食物你坚决不吃？`],
+    [`What's your "hot take" that nobody agrees with?`, `你有什么"暴论"是没人认同的？`],
+    [`What's the last show you binge-watched?`, `你最近一次追剧追到停不下来的是什么？`],
+    [`What's your favorite word to say out loud?`, `你最喜欢说出口的一个词是什么？`],
+    [`What's a habit you have that you didn't realize was unusual until someone pointed it out?`, `有什么习惯，是别人指出后你才发现自己很特别的？`],
+    [`What's your screen time average this week, be honest?`, `这周你的手机屏幕使用时间平均是多少？说实话。`],
+    [`What's the weirdest thing in your bag or pockets right now?`, `你的包包或口袋里现在有什么最奇怪的东西？`],
+    [`What's a sound that instantly annoys you?`, `有什么声音会立刻让你心烦？`],
+    [`What's your go-to order at a coffee shop?`, `你去咖啡店总是点什么？`],
+    [`What's an app on your phone you use way too much?`, `手机上有什么App，是你用得过头的？`],
+    [`What's your favorite way to waste time?`, `你最喜欢用什么方式打发时间？`],
+    [`What's a childhood nickname you had?`, `你小时候有什么绰号？`],
+    [`What's something you're low-key really good at?`, `有什么事，你其实默默地很擅长？`],
+    [`What's a texting habit you have — typos, no punctuation, or writing essays?`, `你发短信有什么习惯（错字连篇、不加标点、还是写小作文）？`],
+    [`Is your walking pace fast, slow, or "depends on my mood"?`, `你走路的速度是快、慢，还是"看心情"？`],
+    [`What's the last meme that made you laugh?`, `最近哪个梗图让你笑出声？`],
+    [`What's a weirdly specific thing you're picky about?`, `有什么莫名其妙的小事，你特别挑剔？`],
+    [`What color would you say represents your personality?`, `你觉得哪个颜色最能代表你的个性？`],
+    [`What's your least favorite chore?`, `你最讨厌做的家务是什么？`],
+    [`What's a sound you could listen to forever?`, `有什么声音你可以听一辈子？`],
+    [`What's your favorite day of the week and why?`, `你最喜欢一周中的哪一天？为什么？`],
+    [`What's a random skill you wish you had?`, `你希望自己拥有什么随机的技能？`]
+  ]},
+  wouldurather: { en: "Would You Rather", zh: "二选一", cards: [
+    [`Would you rather always be 10 minutes late or always 20 minutes early?`, `你宁愿永远迟到10分钟，还是永远早到20分钟？`],
+    [`Would you rather have the ability to time travel or teleport?`, `你宁愿拥有时间旅行的能力，还是瞬间移动的能力？`],
+    [`Would you rather live without music or without movies and TV?`, `你宁愿生活里没有音乐，还是没有电影和电视剧？`],
+    [`Would you rather always have to say exactly what you're thinking, or never speak again?`, `你宁愿必须永远说出自己的真实想法，还是从此再也不能说话？`],
+    [`Would you rather be famous for something embarrassing, or never be famous at all?`, `你宁愿因为一件尴尬的事而出名，还是一辈子都默默无闻？`],
+    [`Would you rather have unlimited money or unlimited time?`, `你宁愿拥有无限的金钱，还是无限的时间？`],
+    [`Would you rather live in a treehouse or an underwater house?`, `你宁愿住在树屋里，还是水下房子里？`],
+    [`Would you rather be able to talk to animals or speak every human language?`, `你宁愿能和动物说话，还是能说世界上所有的语言？`],
+    [`Would you rather always have to whisper or always have to shout?`, `你宁愿永远只能小声说话，还是永远只能大喊？`],
+    [`Would you rather relive your favorite year, or skip 5 years into the future?`, `你宁愿重新经历你最喜欢的那一年，还是直接跳到5年后的未来？`],
+    [`Would you rather have no eyebrows forever, or one long continuous eyebrow?`, `你宁愿永远没有眉毛，还是拥有一条连成一体的粗眉毛？`],
+    [`Would you rather explore outer space or the deep ocean?`, `你宁愿探索外太空，还是深海？`],
+    [`Would you rather always know when someone's lying, or always get away with your own lies?`, `你宁愿总能看穿别人的谎言，还是自己撒的谎永远不会被拆穿？`],
+    [`Would you rather be the funniest person in the room, or the smartest?`, `你宁愿是全场最幽默的人，还是最聪明的人？`],
+    [`Would you rather never use social media again, or never watch another movie again?`, `你宁愿从此不再用社交媒体，还是从此不再看电影？`],
+    [`Would you rather have a rewind button or a pause button for your life?`, `如果人生有一个按钮，你宁愿要"倒带"，还是"暂停"？`],
+    [`Would you rather live in the past or the future?`, `你宁愿活在过去，还是活在未来？`],
+    [`Would you rather be able to fly slowly, or teleport only short distances?`, `你宁愿能慢慢飞行，还是只能短距离瞬间移动？`],
+    [`Would you rather have a photographic memory, or the ability to forget anything on command?`, `你宁愿拥有过目不忘的记忆力，还是能随意选择忘记任何事？`],
+    [`Would you rather always have to sing instead of talk, or dance everywhere you walk?`, `你宁愿说话都要用唱的，还是走路都要跳着走？`],
+    [`Would you rather lose your sense of taste or your sense of smell?`, `你宁愿失去味觉，还是失去嗅觉？`],
+    [`Would you rather be stuck in a lift with your boss, or with your ex?`, `你宁愿和老板困在电梯里，还是和前任困在电梯里？`],
+    [`Would you rather have a personal chef or a personal driver for life?`, `你宁愿一辈子拥有专属厨师，还是专属司机？`],
+    [`Would you rather live without your phone for a month, or without air conditioning for a year?`, `你宁愿一个月不用手机，还是一年没有冷气？`],
+    [`Would you rather always win arguments, or always be right but no one believes you?`, `你宁愿吵架总是赢，还是总是对的但没人相信你？`],
+    [`Would you rather have the power to read minds, or predict the future?`, `你宁愿拥有读心术，还是预知未来的能力？`],
+    [`Would you rather be famous but broke, or rich but unknown?`, `你宁愿出名但没钱，还是有钱但默默无闻？`],
+    [`Would you rather never be able to lie, or never be able to keep a secret?`, `你宁愿永远不能撒谎，还是永远不能保守秘密？`],
+    [`Would you rather repeat this year forever, or skip straight to being 80 years old?`, `你宁愿永远重复过这一年，还是直接跳到80岁？`],
+    [`Would you rather live one very long life, or several short interesting ones?`, `你宁愿活一次很长的人生，还是经历好几段短暂却精彩的人生？`]
+  ]},
+  personality: { en: "Personality & Quirks", zh: "个性与怪癖", cards: [
+    [`Are you a morning person or a night owl?`, `你是晨型人还是夜猫子？`],
+    [`What's a pet peeve that seems small but really gets to you?`, `有什么小事看似不起眼，却特别让你抓狂？`],
+    [`Are you more of an introvert, extrovert, or somewhere in between?`, `你偏内向、外向，还是介于两者之间？`],
+    [`What's a quirky habit your friends tease you about?`, `朋友们常拿你哪个古怪的习惯开玩笑？`],
+    [`How do you usually recharge after a long social event?`, `参加完长时间的社交活动后，你通常怎样给自己充电？`],
+    [`What's something you're irrationally afraid of?`, `你有什么莫名其妙、没道理的恐惧？`],
+    [`Are you more of a planner or a "go with the flow" person?`, `你是计划型的人，还是"随遇而安"型的人？`],
+    [`What's a comfort item you can't leave home without?`, `有什么"安心物品"是你出门必带的？`],
+    [`How do you handle conflict — avoid it, confront it, or somewhere in between?`, `遇到冲突时，你是回避、正面处理，还是介于两者之间？`],
+    [`What's a strange combination of things you love?`, `你有什么奇怪但都很喜欢的组合？`],
+    [`Are you more logical or emotional when making decisions?`, `做决定时，你更偏理性还是感性？`],
+    [`What's something you do that you know is a little irrational?`, `有什么事你明知不太理性，但还是会做？`],
+    [`How organized is your room or workspace right now, honestly?`, `老实说，你现在的房间或办公桌有多整齐？`],
+    [`What's your love language for friendships — quality time, words, or acts of service?`, `在友谊中，你的"爱之语"是什么——高质量的相处时间、言语，还是行动？`],
+    [`Are you more likely to overthink or underthink a situation?`, `面对事情时，你更容易想太多，还是想太少？`],
+    [`What's a weird thing that stresses you out?`, `有什么奇怪的小事会让你压力山大？`],
+    [`Do you talk to yourself out loud? What about?`, `你会自言自语吗？通常说些什么？`],
+    [`What's your default emotion when you're bored?`, `无聊的时候，你的默认情绪是什么？`],
+    [`Are you the friend who plans the group hangouts, or the one who shows up?`, `你是那个负责策划聚会的朋友，还是那个只负责出现的朋友？`],
+    [`What's a small thing that instantly puts you in a good mood?`, `有什么小事能立刻让你心情变好？`],
+    [`How do you show someone you care without saying it directly?`, `你会怎样在不直接说出口的情况下，表达自己在乎对方？`],
+    [`What's your biggest guilty pleasure?`, `你最大的"罪恶快感"是什么？`],
+    [`Are you more of a "rip the band-aid off" or "ease into it" person?`, `面对难事，你是"长痛不如短痛"型，还是"慢慢来"型？`],
+    [`What's something people misunderstand about your personality?`, `关于你的个性，别人常常误解的是什么？`],
+    [`What's your instinctive reaction when plans suddenly change?`, `计划突然改变时，你的第一反应通常是什么？`],
+    [`Do you prefer texting or calling, and why?`, `你更喜欢发短信还是打电话？为什么？`],
+    [`What's a trait you inherited from a parent that you notice in yourself?`, `你身上有什么特质，是从父母那里遗传来的？`],
+    [`What's your "type" of friend — who do you naturally click with?`, `你最容易"来电"的朋友类型是怎样的？`],
+    [`What's something you do differently from most people your age?`, `有什么事，你的做法和大多数同龄人不太一样？`],
+    [`If your personality were a weather forecast, what would it be today?`, `如果你的个性是一份天气预报，今天会是什么天气？`]
+  ]},
+  childhood: { en: "Childhood & Nostalgia", zh: "童年与怀旧", cards: [
+    [`What was your favorite cartoon growing up?`, `你小时候最喜欢的卡通是什么？`],
+    [`What's a game you played as a kid that you wish was still cool?`, `你小时候玩的哪个游戏，你希望现在还流行？`],
+    [`What did you want to be when you grew up?`, `你小时候的梦想职业是什么？`],
+    [`What's your favorite childhood snack?`, `你童年最喜欢的零食是什么？`],
+    [`What's a toy you were obsessed with as a kid?`, `你小时候特别痴迷的玩具是什么？`],
+    [`What's a memory from primary school that still makes you laugh?`, `小学时期有什么回忆，现在想起来还会让你笑？`],
+    [`What was your go-to excuse for not doing homework?`, `你以前不做作业时，最常用的借口是什么？`],
+    [`Who was your childhood best friend, and what happened to that friendship?`, `你童年最好的朋友是谁？后来这段友谊怎样了？`],
+    [`What's the naughtiest thing you did as a kid without getting caught?`, `你小时候做过最调皮却没被发现的事是什么？`],
+    [`What's a family tradition you had growing up?`, `你成长过程中，家里有什么传统？`],
+    [`What was your first pet, and what was it like?`, `你的第一只宠物是什么？它是怎样的？`],
+    [`What's a fashion trend from your childhood you're embarrassed by now?`, `你童年时期流行的哪种打扮，现在想起来觉得尴尬？`],
+    [`What's a place from your childhood you'd love to visit again?`, `有什么童年去过的地方，你想再回去看看？`],
+    [`What was your favorite subject in school, and did it shape who you are now?`, `你最喜欢的学科是什么？它对你现在的样子有影响吗？`],
+    [`What's a rule your parents had that you swore you'd never enforce, or that you now totally understand?`, `父母定的哪条规矩，你曾发誓绝不会这样对待别人（或现在完全理解了）？`],
+    [`What's the most memorable birthday party you had as a kid?`, `你童年最难忘的一次生日派对是怎样的？`],
+    [`What's a childhood fear you eventually outgrew?`, `你童年有什么恐惧，后来渐渐克服了？`],
+    [`What's a song from your childhood that still gives you nostalgia?`, `有什么童年的歌曲，现在听到还会让你怀旧？`],
+    [`What's something you believed as a kid that turned out to be completely wrong?`, `你小时候深信不疑，后来才发现完全错误的一件事是什么？`],
+    [`What's a childhood injury or "battle scar" you still have a story about?`, `你身上有什么童年留下的伤疤，背后有什么故事？`],
+    [`What did your bedroom look like growing up?`, `你小时候的房间是什么样子的？`],
+    [`What's a school teacher who left a lasting impression on you?`, `有哪位老师给你留下了深刻的印象？`],
+    [`What's the weirdest thing you were into as a kid that no one else understood?`, `你小时候痴迷什么奇怪的东西，是别人都不理解的？`],
+    [`What's your earliest memory?`, `你最早的记忆是什么？`],
+    [`What's a family road trip or vacation you still remember vividly?`, `有什么家庭旅行，你至今记忆犹新？`],
+    [`What did you and your childhood friends used to argue about?`, `你和童年的朋友以前常为了什么吵架？`],
+    [`What's a childhood dream you eventually gave up on?`, `你童年有什么梦想，后来放弃了？`],
+    [`What's something your parents did that you now realize was actually really smart?`, `父母做过的什么事，你现在才意识到其实很有智慧？`],
+    [`What's the most trouble you ever got into as a kid?`, `你小时候闯过最大的祸是什么？`],
+    [`If you could relive one day from your childhood, which would it be?`, `如果能重新经历童年的一天，你会选哪一天？`]
+  ]},
+  food: { en: "Food & Taste", zh: "美食与口味", cards: [
+    [`What's your death row meal — the one thing you'd eat if it were your last?`, `如果这是你人生最后一餐，你会选择吃什么？`],
+    [`What's a food combination you love that others find weird?`, `你喜欢什么食物搭配，是别人觉得很奇怪的？`],
+    [`What's your comfort food when you're feeling down?`, `心情不好时，你会想吃什么"治愈系"食物？`],
+    [`Are you a sweet or savory person?`, `你偏爱甜食还是咸食？`],
+    [`What's the best meal you've ever had?`, `你吃过最棒的一顿饭是什么？`],
+    [`What's a food you used to hate but now love?`, `有什么食物你以前讨厌，现在却很喜欢？`],
+    [`What's your go-to order when you don't know what to eat?`, `不知道吃什么时，你通常会点什么？`],
+    [`What's a dish you make, or wish you could make, really well?`, `有什么菜是你很拿手（或希望自己很拿手）的？`],
+    [`What's the spiciest thing you've ever eaten, and did you survive?`, `你吃过最辣的东西是什么？你挺过来了吗？`],
+    [`What's a food trend you don't understand the hype about?`, `有什么很红的美食潮流，是你完全无法理解为什么这么火的？`],
+    [`What's your favorite hawker stall or hidden gem restaurant?`, `你最喜欢的小贩摊位或私藏的隐藏美食是哪一家？`],
+    [`What's a cuisine you'd love to explore more?`, `你希望多多探索哪种料理？`],
+    [`Are you a breakfast person, or do you skip it entirely?`, `你是吃早餐的人，还是完全不吃早餐？`],
+    [`What's a snack you could eat an entire bag of without noticing?`, `有什么零食，你能不知不觉吃完一整包？`],
+    [`What's the weirdest thing you've ever eaten?`, `你吃过最奇怪的东西是什么？`],
+    [`What's your ultimate cheat-day meal?`, `你的"放纵日"终极美食是什么？`],
+    [`What's a food you're surprisingly picky about?`, `有什么食物，你的挑剔程度出乎意料？`],
+    [`What's your favorite drink order — coffee, tea, boba, or something else?`, `你最喜欢点什么饮料——咖啡、茶、珍珠奶茶，还是别的？`],
+    [`What's a restaurant you'd go back to again and again?`, `有哪家餐厅是你会一去再去的？`],
+    [`What's a dish from your culture you're proud of?`, `你的家乡或文化中，有什么菜是你引以为豪的？`],
+    [`Are you Team Pineapple-on-Pizza, or firmly against it?`, `你支持"菠萝披萨"，还是坚决反对？`],
+    [`What's the best dessert you've ever had?`, `你吃过最好吃的甜点是什么？`],
+    [`What's something you always order even though you know you should try something new?`, `有什么东西，你明知该尝试新菜色，却总是点它？`],
+    [`What's a food memory tied to a specific person in your life?`, `有什么美食回忆，是和你生命中某个特定的人有关的？`],
+    [`What's your ideal cheat-day meal lineup?`, `你理想中的"放纵日"菜单会有哪些？`],
+    [`What's a food you refuse to share, even with close friends?`, `有什么食物，即使是好朋友你也不愿意分享？`],
+    [`What's the most adventurous food you'd be willing to try?`, `你愿意尝试的最"冒险"的食物是什么？`],
+    [`What's a meal that instantly reminds you of home?`, `有什么一道菜，会让你立刻想起家？`],
+    [`What's your opinion on durian — love it or hate it?`, `你对榴莲的看法是什么——爱还是恨？`],
+    [`If you could only eat one cuisine for the rest of your life, what would it be?`, `如果余生只能吃一种料理，你会选哪种？`]
+  ]},
+  popculture: { en: "Pop Culture & Entertainment", zh: "流行文化与娱乐", cards: [
+    [`What's a show you could rewatch endlessly?`, `有什么剧你可以反复看不腻？`],
+    [`Who's a celebrity you'd love to have dinner with?`, `你想和哪位明星一起吃饭？`],
+    [`What's a movie that made you cry?`, `有什么电影让你哭过？`],
+    [`What's your favorite music genre right now?`, `你现在最喜欢的音乐类型是什么？`],
+    [`What's a book that changed the way you think?`, `有什么书改变了你的思维方式？`],
+    [`What's a TV series everyone loves that you just can't get into?`, `有什么大家都爱的剧，你却怎么也看不进去？`],
+    [`What's the last concert or live show you went to?`, `你最近一次去看的演唱会或现场演出是什么？`],
+    [`What's a guilty-pleasure show you secretly love?`, `有什么"罪恶快感"剧，是你偷偷喜欢的？`],
+    [`What's a fictional character you relate to the most?`, `有哪个虚构角色，你觉得最能代表你？`],
+    [`What's your favorite fandom or franchise?`, `你最喜欢的"粉丝圈"或系列作品是什么？`],
+    [`What's a song that instantly puts you in a good mood?`, `有什么歌能立刻让你心情变好？`],
+    [`If your life were a movie, what genre would it be?`, `如果你的人生是一部电影，会是什么类型？`],
+    [`What's a plot twist that shocked you?`, `有什么剧情反转让你大吃一惊？`],
+    [`Who's your celebrity crush, purely as admiration?`, `你欣赏（单纯喜欢）的明星是谁？`],
+    [`What's a video game you've sunk way too many hours into?`, `有什么电子游戏，你花了太多时间在上面？`],
+    [`What's an actor or actress you think is underrated?`, `你觉得哪位演员被低估了？`],
+    [`What's a movie you think is overrated?`, `你觉得哪部电影被高估了？`],
+    [`What's your favorite decade for music?`, `你最喜欢哪个年代的音乐？`],
+    [`What's a podcast you're currently obsessed with?`, `你最近沉迷于哪个播客节目？`],
+    [`What's a show you finished and immediately felt an emptiness after?`, `有什么剧你看完后立刻感到"追剧空窗期"的失落？`],
+    [`What's a fictional world you wish you could live in?`, `你希望能生活在哪个虚构的世界里？`],
+    [`Who's an artist or musician you'd love to see live?`, `你希望能现场看到哪位歌手或音乐人表演？`],
+    [`What's a K-drama, anime, or series you're currently watching?`, `你最近在追什么韩剧、动漫或剧集？`],
+    [`What's your comfort movie — the one you rewatch when you need a pick-me-up?`, `你的"治愈系电影"是什么，需要打气时你会重看它？`],
+    [`What's a celebrity scandal or drama you followed way too closely?`, `有什么明星八卦，你追得比谁都投入？`],
+    [`What's a soundtrack or score that gives you chills?`, `有什么电影配乐会让你起鸡皮疙瘩？`],
+    [`What's a piece of art — a book, film, or song — that made you see the world differently?`, `有什么艺术作品（书、电影或歌曲）改变了你看世界的方式？`],
+    [`What's a show or movie you pretend to have watched but haven't?`, `有什么剧或电影，你假装看过但其实没看？`],
+    [`What's your most-played song this year?`, `今年你听得最多的一首歌是什么？`],
+    [`If you could be any fictional character for a day, who would you be?`, `如果能当一天任何虚构角色，你会选谁？`]
+  ]},
+  hypotheticals: { en: "Hypotheticals & Imagination", zh: "假设与想象", cards: [
+    [`If you could instantly master any skill, what would it be?`, `如果能瞬间掌握任何一项技能，你会选什么？`],
+    [`If you had a warning label, what would it say?`, `如果你身上有一个警告标签，上面会写什么？`],
+    [`If you could live in any era of history, when would you choose?`, `如果能生活在历史上任何一个时代，你会选哪个？`],
+    [`If you were a superhero, what would your power and weakness be?`, `如果你是超级英雄，你的超能力和弱点会是什么？`],
+    [`If you could swap lives with anyone for a week, who would it be?`, `如果能和任何人互换生活一周，你会选谁？`],
+    [`If your life had a theme song, what would it be?`, `如果你的人生有一首主题曲，会是哪首？`],
+    [`If you could only keep three possessions, what would they be?`, `如果只能保留三样物品，你会留下什么？`],
+    [`If you woke up famous tomorrow, what would you want to be famous for?`, `如果明天一觉醒来突然出名了，你希望是因为什么而出名？`],
+    [`If you could instantly speak any language, which would you choose?`, `如果能瞬间学会一门语言，你会选哪种？`],
+    [`If you had to move to a new country tomorrow, where would you go?`, `如果明天必须搬到一个新国家，你会选哪里？`],
+    [`If you could relive any one day of your life, which would it be?`, `如果能重新经历人生中的一天，你会选哪天？`],
+    [`If you could ask a fortune teller one question, what would you ask?`, `如果能问算命师一个问题，你会问什么？`],
+    [`If animals could talk, which would be the rudest?`, `如果动物会说话，你觉得哪种动物会最没礼貌？`],
+    [`If you could have dinner with any historical figure, who would it be?`, `如果能和历史上任何一位人物共进晚餐，你会选谁？`],
+    [`If your pet could talk, what do you think it would say about you?`, `如果你的宠物会说话，你觉得它会怎么评价你？`],
+    [`If you had an unlimited budget for one day, what would you do?`, `如果一天内预算无上限，你会做什么？`],
+    [`If you could instantly change one thing about the world, what would it be?`, `如果能立刻改变世界上的一件事，你会改变什么？`],
+    [`If you were stranded on an island, what three items would you want with you?`, `如果流落荒岛，你希望身边有哪三样东西？`],
+    [`If you could be invisible for a day, what would you do?`, `如果能隐身一天，你会做什么？`],
+    [`If your life were a book, what would the title of this chapter be?`, `如果你的人生是一本书，这一章会叫什么标题？`],
+    [`If you had to give a TED talk tomorrow, what would it be about?`, `如果明天要做一场TED演讲，你会讲什么主题？`],
+    [`If you could design your dream house, what's the one must-have feature?`, `如果能设计梦想中的房子，你一定要有的一个特色是什么？`],
+    [`If you could time travel but only to your own past, when would you go?`, `如果只能穿越回自己的过去，你会选哪个时间点？`],
+    [`If you were a flavor of ice cream, what would you be?`, `如果你是一种冰淇淋口味，会是什么味道？`],
+    [`If you could have any job for a day, no experience required, what would it be?`, `如果能不需要任何经验就体验任何职业一天，你会选什么？`],
+    [`If you started a podcast, what would it be about?`, `如果你要开一个播客节目，主题会是什么？`],
+    [`If aliens landed tomorrow, what's the first thing you'd ask them?`, `如果明天外星人降落地球，你想问他们的第一个问题是什么？`],
+    [`If you could bring back one discontinued food or product, what would it be?`, `如果能让一款已经停产的食物或产品重新上市，你会选哪个？`],
+    [`If you had to survive a zombie apocalypse with only the people in this group, what role would you play?`, `如果只能和这个群体一起活过僵尸末日，你会扮演什么角色？`],
+    [`If your friend group made a movie about your friendship, what would the title be?`, `如果这个朋友群拍一部关于我们友谊的电影，片名会是什么？`]
+  ]},
+  friendship: { en: "Friendship & Us", zh: "友谊与我们", cards: [
+    [`How did we all first meet?`, `我们大家最初是怎么认识的？`],
+    [`What's your favorite memory with this group?`, `和这个群体在一起，你最喜欢的回忆是什么？`],
+    [`What's a quality you value most in a friend?`, `在朋友身上，你最看重的品质是什么？`],
+    [`What's something you appreciate about someone in this group right now?`, `此刻你想感谢这个群体中某个人的什么？`],
+    [`What's the funniest thing that's happened when we've hung out?`, `我们一起出去玩时，发生过最搞笑的一件事是什么？`],
+    [`What's a tradition you'd love for this group to start?`, `你希望这个群体开始一个怎样的传统？`],
+    [`How do you usually show someone you're thinking of them?`, `你通常怎样让别人知道你在想着他们？`],
+    [`What's a trip or adventure you'd love for us to take together?`, `你希望我们一起去经历怎样的一次旅行或冒险？`],
+    [`What's something about this friend group that makes it different from others?`, `这个朋友群体有什么地方，是和其他群体不一样的？`],
+    [`What's a nickname this group has given you, and how do you feel about it?`, `这个群体给你取过什么绰号？你对它感觉如何？`],
+    [`What's a moment this group supported you that meant a lot?`, `这个群体曾在哪个时刻支持过你，对你意义重大？`],
+    [`What's something you wish we did more of together?`, `你希望我们一起多做点什么？`],
+    [`What's a role you naturally play in this friend group — the planner, the mediator, the jokester?`, `在这个朋友群里，你自然扮演的角色是什么（策划者、和事佬、开心果）？`],
+    [`What's a memory you'll definitely tell your future kids or grandkids about this group?`, `关于这个群体，有什么回忆你以后一定会讲给孩子或孙辈听？`],
+    [`What's a food or place that's basically "our thing" as a group?`, `有什么食物或地方，已经成为我们这个群体的"专属标签"？`],
+    [`What's something you've learned from a friend in this group?`, `这个群体中的某个朋友，教会了你什么？`],
+    [`What's a game or activity this group is surprisingly competitive about?`, `这个群体在什么游戏或活动上，胜负欲出乎意料地强？`],
+    [`What's a way you'd like to reconnect more with someone in this group?`, `你希望怎样和这个群体中的某个人更多联系？`],
+    [`What's the most spontaneous thing this group has ever done?`, `这个群体做过最随性、说走就走的事是什么？`],
+    [`What's a compliment you've always wanted to give someone here but haven't?`, `有什么夸奖，你一直想对这里的某个人说却还没说出口？`],
+    [`What's something about this group chat that always makes you laugh?`, `这个群聊里有什么事，总能让你笑出来？`],
+    [`What's a group photo or memory you'd frame if you could?`, `如果可以，你会把哪张合照或回忆装裱起来？`],
+    [`What's a running joke in this group that outsiders wouldn't understand?`, `这个群体有什么"内部梗"，是外人完全不懂的？`],
+    [`What's something you'd want this group to do together before everyone gets too busy?`, `在大家都变得更忙之前，你希望这个群体一起做什么？`],
+    [`What's a way this group has changed you for the better?`, `这个群体在哪些方面让你变得更好？`],
+    [`What's a hobby or interest you wish more people in this group were into?`, `你希望这个群体里更多人对什么爱好感兴趣？`],
+    [`What's the best advice a friend in this group has given you?`, `这个群体中的朋友给过你最好的建议是什么？`],
+    [`What's something you're grateful this group has never judged you for?`, `有什么事，你很感激这个群体从未评判过你？`],
+    [`What's one word you'd use to describe this friend group?`, `你会用一个词来形容这个朋友群，会是什么？`],
+    [`If this friend group had a motto, what would it be?`, `如果这个朋友群有一句座右铭，会是什么？`]
+  ]},
+  random: { en: "Random Musings", zh: "随想杂谈", cards: [
+    [`What's a conspiracy theory you low-key believe, the harmless kind?`, `有什么无伤大雅的阴谋论，你其实有点相信？`],
+    [`What's a life hack you swear by?`, `你坚信不疑的一个生活小妙招是什么？`],
+    [`What's the most useless thing you own but refuse to get rid of?`, `你有什么最没用但坚决不肯丢掉的东西？`],
+    [`What's a rule of thumb you live by?`, `你一直奉行的一个经验法则是什么？`],
+    [`What's a small act of kindness someone did for you that you still remember?`, `有什么小小的善意举动，是别人为你做过、你至今记得的？`],
+    [`What's a purchase you regret?`, `有什么东西是你买了之后后悔的？`],
+    [`What's a purchase that was totally worth it?`, `有什么东西是你买了之后觉得超值的？`],
+    [`What's something everyone seems to like that you just don't get?`, `有什么东西大家都喜欢，但你完全无法理解？`],
+    [`What's a random fact you can't stop thinking about?`, `有什么冷知识，让你一直忘不掉？`],
+    [`What's the most "local" or unmistakably you-are-from-here thing about you?`, `你身上有什么最"接地气"、一看就知道你是这里长大的特质？`],
+    [`What's a question you wish people asked you more often?`, `你希望别人更常问你什么问题？`],
+    [`What's a mundane task you find weirdly satisfying?`, `有什么日常琐事，会让你莫名有满足感？`],
+    [`What's a rule at work or school you think is unnecessary?`, `工作或学校里，有什么规定你觉得完全没必要？`],
+    [`What's something you overthink way more than you should?`, `有什么事，你总是想太多？`],
+    [`What's the last thing that made you feel really proud of yourself?`, `最近有什么事，让你为自己感到特别骄傲？`],
+    [`What's a random skill you learned from YouTube?`, `你从YouTube上学到过什么随机的技能？`],
+    [`What's something you do to procrastinate?`, `拖延的时候，你通常会做什么？`],
+    [`What's a habit you're trying to break?`, `你正在努力戒掉的一个习惯是什么？`],
+    [`What's a habit you're trying to build?`, `你正在努力养成的一个习惯是什么？`],
+    [`What's a small thing that instantly ruins your mood?`, `有什么小事会瞬间毁掉你的好心情？`],
+    [`What's an "adulting" task you still don't feel confident doing?`, `有什么"成年人该会的事"，你至今还没自信能做好？`],
+    [`What's a piece of advice you got that you still think about?`, `有什么建议，你到现在还常常想起？`],
+    [`What's a weird thing you're surprisingly knowledgeable about?`, `有什么奇怪的领域，你其实懂得出乎意料地多？`],
+    [`What's your personality type, if you know it, and do you think it's accurate?`, `你的性格测试类型是什么（如果知道的话）？你觉得准吗？`],
+    [`What's an unpopular opinion you hold?`, `你有什么不太受欢迎的观点？`],
+    [`What's something that instantly earns your respect?`, `有什么事能立刻让你对一个人心生敬意？`],
+    [`What's a thing you do that you can't explain why?`, `有什么事你经常做，但自己也说不清为什么？`],
+    [`What's your biggest pet peeve in group chats?`, `在群聊里，你最讨厌的行为是什么？`],
+    [`What's a random object you'd want to be if you were reincarnated as an object?`, `如果转世变成一个物品，你希望是什么？`],
+    [`What's something you're weirdly competitive about?`, `有什么事，你其实莫名地很有胜负欲？`]
+  ]},
+  dreams: { en: "Dreams, Goals & Future", zh: "梦想目标与未来", cards: [
+    [`What's something on your bucket list?`, `你的人生愿望清单上有什么？`],
+    [`Where do you see yourself in 10 years?`, `十年后，你觉得自己会是什么样子？`],
+    [`What's a skill you want to learn this year?`, `今年你想学什么新技能？`],
+    [`What's a dream job you'd want, money aside?`, `如果不考虑收入，你的梦想工作是什么？`],
+    [`What's a place you're dying to travel to?`, `你最想去旅行的地方是哪里？`],
+    [`What's a fear you'd like to overcome?`, `你想克服的一个恐惧是什么？`],
+    [`What's a goal you're currently working toward?`, `你目前正在努力实现的目标是什么？`],
+    [`What's something you want to be remembered for?`, `你希望自己因为什么被人记住？`],
+    [`What's a habit you want to build to become the person you want to be?`, `你想养成什么习惯，来成为自己想成为的人？`],
+    [`What's something you'd regret not trying?`, `有什么事，如果没尝试过你会后悔？`],
+    [`What's a version of your future self you're excited about?`, `未来的哪个自己，让你感到期待？`],
+    [`What's a milestone you're looking forward to?`, `有什么人生里程碑，是你正在期待的？`],
+    [`What's something you want to learn about yourself this year?`, `今年你想更了解自己的哪一面？`],
+    [`What's a risk you're considering taking?`, `你正在考虑冒的一个险是什么？`],
+    [`What's a comfort zone you'd like to step out of?`, `你想跨出的一个舒适圈是什么？`],
+    [`What's something you want more of in your life right now?`, `此刻你希望生活中能多一点什么？`],
+    [`What's a hobby you want to pick up someday?`, `有什么爱好，你希望有一天能开始培养？`],
+    [`What's a big life decision you're navigating?`, `你目前正在面对怎样一个重大的人生决定？`],
+    [`What's a dream you had as a kid that you still think about?`, `你小时候有什么梦想，现在还偶尔会想起？`],
+    [`What's a personal record or achievement you're proud of?`, `有什么个人成就，是你感到骄傲的？`],
+    [`What's something you want to say "yes" to more often?`, `你希望自己以后能更常对什么说"好"？`],
+    [`What's a relationship — family, friend, or otherwise — you want to invest more in?`, `有什么关系（家人、朋友或其他），是你想多花心思经营的？`],
+    [`What's a change you're hoping for in the next year?`, `未来一年，你希望有什么改变？`],
+    [`What's something you want to let go of?`, `有什么事，是你想放下的？`],
+    [`What's a legacy you'd want to leave, big or small?`, `无论大小，你希望留下怎样的印记？`],
+    [`What's a way you want to grow this year?`, `今年你希望在哪方面成长？`],
+    [`What's a place you'd want to live someday?`, `将来你希望能住在哪里？`],
+    [`What's a "someday" plan you actually want to make happen soon?`, `有什么"总有一天要做"的计划，你其实希望能尽快实现？`],
+    [`What's the boldest goal you have right now?`, `你目前最大胆的一个目标是什么？`],
+    [`If this year had a theme, what would you want it to be?`, `如果今年有一个主题，你希望是什么？`]
+  ]}
+};
+
+const WYR_DECKS = {
+  silly: { en: "Silly & Everyday", zh: "无厘头日常", cards: [
+    [`Would you rather always have wet socks or always have a pebble in your shoe?`, `你宁愿袜子永远是湿的，还是鞋子里永远有颗小石子？`],
+    [`Would you rather sneeze uncontrollably for a minute or hiccup for an hour?`, `你宁愿连续打喷嚏一分钟，还是打嗝一整个小时？`],
+    [`Would you rather always have messy hair or always have spinach in your teeth?`, `你宁愿头发永远乱糟糟，还是牙缝里永远卡着菜叶？`],
+    [`Would you rather forget your umbrella every rainy day or forget your charger every trip?`, `你宁愿每个雨天都忘带伞，还是每次出门都忘带充电器？`],
+    [`Would you rather have to hum before every sentence or clap after every sentence?`, `你宁愿每句话前都要哼一声，还是每句话后都要拍手？`],
+    [`Would you rather always be slightly too cold or slightly too hot?`, `你宁愿永远感觉有点冷，还是永远感觉有点热？`],
+    [`Would you rather have permanently soggy shoes or permanently itchy socks?`, `你宁愿鞋子永远湿答答，还是袜子永远痒痒的？`],
+    [`Would you rather always have a song stuck in your head or always have a word on the tip of your tongue?`, `你宁愿脑海里总有一首歌挥之不去，还是总有一个词说不出口卡在嘴边？`],
+    [`Would you rather never be able to skip a song or never be able to fast-forward a show?`, `你宁愿听歌永远不能跳过，还是看剧永远不能快进？`],
+    [`Would you rather always have slow wifi or always have a slow phone?`, `你宁愿网速永远很慢，还是手机永远很卡？`],
+    [`Would you rather lose your phone charger every week or lose one sock every laundry day?`, `你宁愿每周都弄丢充电器，还是每次洗衣服都少一只袜子？`],
+    [`Would you rather always sit in the middle seat or always stand on public transport?`, `你宁愿搭车永远坐中间座位，还是永远只能站着？`],
+    [`Would you rather have to narrate your actions out loud all day or think everything in a whisper?`, `你宁愿一整天都要把自己的动作大声念出来，还是所有想法都只能用耳语说？`],
+    [`Would you rather always run five minutes late or always arrive twenty minutes early?`, `你宁愿永远迟到五分钟，还是永远早到二十分钟？`],
+    [`Would you rather never be able to use punctuation or never be able to use capital letters when texting?`, `你宁愿发短信永远不能用标点符号，还是永远不能用大写字母？`],
+    [`Would you rather always have a paper cut on your finger or always have a stubbed toe feeling?`, `你宁愿手指上总有一道纸割伤，还是脚趾总有种撞到的痛感？`],
+    [`Would you rather have to high-five everyone you meet or bow to everyone you meet?`, `你宁愿每次见人都要击掌，还是每次见人都要鞠躬？`],
+    [`Would you rather always have crumbs in your bed or always have a rock in your pillow?`, `你宁愿床上总有面包屑，还是枕头里总卡着一颗小石子？`],
+    [`Would you rather never find matching socks again or never find the TV remote again?`, `你宁愿永远找不到成对的袜子，还是永远找不到电视遥控器？`],
+    [`Would you rather have your phone battery always at 5% or your phone screen always slightly cracked?`, `你宁愿手机电量永远只剩5%，还是手机屏幕永远有点裂？`],
+    [`Would you rather always burp loudly or always sneeze loudly?`, `你宁愿打嗝声总是很大声，还是打喷嚏总是很大声？`],
+    [`Would you rather always have to use a flip phone or always have a phone with 1% storage left?`, `你宁愿永远只能用翻盖手机，还是手机内存永远只剩1%？`],
+    [`Would you rather always overpack for trips or always underpack for trips?`, `你宁愿出门旅行总是行李带太多，还是总是带太少？`],
+    [`Would you rather always have a crick in your neck or always have pins and needles in your foot?`, `你宁愿脖子总是落枕，还是脚总是麻？`],
+    [`Would you rather always forget people's names or always forget where you parked?`, `你宁愿总是记不住别人的名字，还是总是忘记车停在哪？`],
+    [`Would you rather have unlimited free snacks but no drinks, or unlimited free drinks but no snacks?`, `你宁愿零食免费吃到饱但没有饮料，还是饮料免费喝到饱但没有零食？`],
+    [`Would you rather always have your shoelaces untied or your zipper stuck halfway?`, `你宁愿鞋带永远系不紧，还是拉链永远卡在一半？`],
+    [`Would you rather have to sneeze into your hands with no tissue nearby or always have a runny nose in public?`, `你宁愿打喷嚏时手边永远没有纸巾，还是在公共场合总是流鼻涕？`],
+    [`Would you rather always have a slightly too-short umbrella or a slightly too-heavy backpack?`, `你宁愿伞永远有点太短，还是背包永远有点太重？`],
+    [`Would you rather never be able to find a pen that works or never find a working charger?`, `你宁愿永远找不到能写字的笔，还是永远找不到能用的充电线？`]
+  ]},
+  superpowers: { en: "Superpowers & Fantasy", zh: "超能力与奇幻", cards: [
+    [`Would you rather be able to fly or be invisible?`, `你宁愿会飞，还是能隐身？`],
+    [`Would you rather have super strength or super speed?`, `你宁愿拥有超级力量，还是超级速度？`],
+    [`Would you rather read minds or predict the future?`, `你宁愿会读心术，还是能预知未来？`],
+    [`Would you rather control fire or control water?`, `你宁愿能操控火，还是操控水？`],
+    [`Would you rather teleport anywhere instantly or freeze time whenever you want?`, `你宁愿能瞬间移动到任何地方，还是能随时让时间静止？`],
+    [`Would you rather be able to talk to animals or understand every human language?`, `你宁愿能和动物说话，还是能听懂所有人类语言？`],
+    [`Would you rather have the power of super healing or super senses?`, `你宁愿拥有超强的自愈能力，还是超强的感官能力？`],
+    [`Would you rather shrink to the size of an ant or grow to the size of a building?`, `你宁愿缩小到蚂蚁那么小，还是长到一栋楼那么大？`],
+    [`Would you rather have a magic ring that grants three wishes or a genie who grants unlimited small favors?`, `你宁愿拥有一枚能实现三个愿望的魔法戒指，还是一位能满足无限小请求的精灵？`],
+    [`Would you rather be able to breathe underwater or survive without sleep?`, `你宁愿能在水下呼吸，还是永远不需要睡觉？`],
+    [`Would you rather have the ability to copy any skill instantly or have unlimited knowledge in one subject?`, `你宁愿能瞬间复制任何技能，还是在某一领域拥有无限的知识？`],
+    [`Would you rather be a dragon or a wizard?`, `你宁愿是一条龙，还是一位巫师？`],
+    [`Would you rather live in a world with magic but no technology, or technology but no magic?`, `你宁愿生活在有魔法但没有科技的世界，还是有科技但没有魔法的世界？`],
+    [`Would you rather have wings or a tail?`, `你宁愿拥有翅膀，还是尾巴？`],
+    [`Would you rather be able to control the weather or control plants?`, `你宁愿能操控天气，还是操控植物？`],
+    [`Would you rather have the power of invisibility only at night or super strength only during the day?`, `你宁愿只在夜晚拥有隐身能力，还是只在白天拥有超级力量？`],
+    [`Would you rather be a superhero with no sidekick or a sidekick to a legendary superhero?`, `你宁愿是一个没有搭档的超级英雄，还是一位传奇超级英雄的助手？`],
+    [`Would you rather have a pet dragon or a pet unicorn?`, `你宁愿养一只宠物龙，还是一只宠物独角兽？`],
+    [`Would you rather be able to summon any object you need or duplicate any object you touch?`, `你宁愿能召唤任何你需要的物品，还是能复制任何你触摸的物品？`],
+    [`Would you rather have the power to undo one mistake per day or see one day into the future each morning?`, `你宁愿每天能撤销一个错误，还是每天早上能预见接下来一天的事？`],
+    [`Would you rather live in a fantasy world of your choosing or bring one fantasy creature into our world?`, `你宁愿自己选择进入一个奇幻世界，还是把一种奇幻生物带到我们的世界？`],
+    [`Would you rather have the power to make anyone laugh or the power to make anyone feel instantly calm?`, `你宁愿拥有让任何人都笑出来的能力，还是让任何人瞬间平静下来的能力？`],
+    [`Would you rather be immortal but unable to leave one city, or have a normal lifespan but travel anywhere?`, `你宁愿长生不老但只能待在一座城市，还是拥有正常寿命但能去任何地方？`],
+    [`Would you rather have the power to fly at the speed of a bird or swim at the speed of a dolphin?`, `你宁愿以鸟的速度飞行，还是以海豚的速度游泳？`],
+    [`Would you rather be able to talk to plants or talk to inanimate objects?`, `你宁愿能和植物说话，还是能和没有生命的物品说话？`],
+    [`Would you rather have a magic backpack that holds anything, or magic shoes that take you anywhere?`, `你宁愿拥有一个能装下任何东西的魔法背包，还是一双能带你去任何地方的魔法鞋？`],
+    [`Would you rather be granted eternal youth or eternal wisdom?`, `你宁愿获得永恒的青春，还是永恒的智慧？`],
+    [`Would you rather have the power to control gravity or control electricity?`, `你宁愿能操控重力，还是操控电力？`],
+    [`Would you rather be a powerful wizard who's feared, or a kind wizard who's underestimated?`, `你宁愿是一位令人畏惧的强大巫师，还是一位善良却被低估的巫师？`],
+    [`Would you rather have a magic mirror that always tells the truth, or one that always gives good advice?`, `你宁愿拥有一面永远说真话的魔镜，还是一面总能给出好建议的魔镜？`]
+  ]},
+  money: { en: "Money & Lifestyle", zh: "金钱与生活方式", cards: [
+    [`Would you rather have unlimited money but have to work a 9-to-5 job forever, or moderate money with full freedom over your time?`, `你宁愿拥有花不完的钱但要永远朝九晚五地工作，还是收入普通但完全掌控自己的时间？`],
+    [`Would you rather live in a huge house far from everyone you know, or a small apartment near everyone you love?`, `你宁愿住在远离所有熟人的大房子里，还是住在离所有你爱的人很近的小公寓里？`],
+    [`Would you rather win a small amount of money every week for life, or one huge lump sum once?`, `你宁愿一辈子每周赢一小笔钱，还是一次性获得一大笔钱？`],
+    [`Would you rather never have to pay rent again or never have to pay for groceries again?`, `你宁愿这辈子不用再付房租，还是不用再付买菜的钱？`],
+    [`Would you rather have a high-paying job you dislike or a low-paying job you love?`, `你宁愿从事一份高薪但不喜欢的工作，还是低薪但喜欢的工作？`],
+    [`Would you rather retire at 40 with a modest lifestyle or retire at 65 with a luxurious one?`, `你宁愿40岁退休过普通的生活，还是65岁退休过奢华的生活？`],
+    [`Would you rather live minimally with very few possessions, or live comfortably but always slightly in debt?`, `你宁愿极简生活、几乎没什么物品，还是过得舒适但总是有点负债？`],
+    [`Would you rather have financial security but a boring routine, or financial uncertainty but constant adventure?`, `你宁愿拥有财务保障但生活一成不变，还是经济不稳定但充满冒险？`],
+    [`Would you rather be given a free house in a place you don't love, or pay full price for a house somewhere you do?`, `你宁愿免费获得一栋你不喜欢的地方的房子，还是自己出全款买一栋你喜欢的地方的房子？`],
+    [`Would you rather never worry about money again but never get a raise, or worry about money but have unlimited earning potential?`, `你宁愿从此不用担心钱但永远不会加薪，还是要为钱操心但收入潜力无限？`],
+    [`Would you rather live simply in a place you love or live luxuriously in a place you don't care for?`, `你宁愿在你喜欢的地方过简单的生活，还是在你不太在乎的地方过奢华的生活？`],
+    [`Would you rather have a rent-free apartment in the city or a mortgage-free house in the countryside?`, `你宁愿在城市里有一间免租金的公寓，还是在乡下有一栋无贷款的房子？`],
+    [`Would you rather work fewer hours for less pay or more hours for significantly more pay?`, `你宁愿工时更少但薪水更少，还是工时更长但薪水明显更多？`],
+    [`Would you rather have your dream car but a modest home, or your dream home but a modest car?`, `你宁愿拥有梦想中的车但住普通的房子，还是拥有梦想中的房子但开普通的车？`],
+    [`Would you rather inherit a family business you don't love or build your own from scratch with no safety net?`, `你宁愿继承一份你并不热爱的家族企业，还是白手起家、毫无后盾地创业？`],
+    [`Would you rather have free travel for life but no savings, or great savings but never travel again?`, `你宁愿一辈子免费旅行但没有存款，还是有丰厚的存款但再也不能旅行？`],
+    [`Would you rather live paycheck to paycheck in your dream city, or comfortably in a city you find boring?`, `你宁愿在你梦想的城市里月光族地生活，还是在一个你觉得无聊的城市里过得宽裕？`],
+    [`Would you rather have an unpredictable but exciting income, or a fixed and predictable but modest one?`, `你宁愿收入不稳定但充满刺激，还是收入固定但普通？`],
+    [`Would you rather never eat out again but always afford rent easily, or eat out every day but always be tight on rent?`, `你宁愿再也不能外食但房租轻松负担，还是每天都能外食但房租总是紧巴巴？`],
+    [`Would you rather have a job with great work-life balance but low prestige, or a prestigious job that consumes your life?`, `你宁愿从事一份工作与生活平衡很好但地位不高的工作，还是一份地位很高但占据你全部生活的工作？`],
+    [`Would you rather live somewhere with amazing weather but a high cost of living, or affordable but with bad weather?`, `你宁愿住在天气很好但生活成本高的地方，还是生活成本低但天气糟糕的地方？`],
+    [`Would you rather have unlimited access to books and courses but no time to enjoy them, or plenty of free time but limited resources?`, `你宁愿拥有无限的书籍和课程但没有时间享受，还是拥有大把空闲时间但资源有限？`],
+    [`Would you rather be debt-free with an average salary, or have a high salary but significant debt?`, `你宁愿没有负债但薪水普通，还是薪水很高但负债不少？`],
+    [`Would you rather work remotely forever from anywhere, or work in-office but only three days a week?`, `你宁愿永远可以在任何地方远程工作，还是必须进办公室但每周只上三天班？`],
+    [`Would you rather have a big wedding you can barely afford, or a small wedding with extra savings?`, `你宁愿办一场几乎负担不起的盛大婚礼，还是一场简单的婚礼但留下更多存款？`],
+    [`Would you rather own a business that barely breaks even, or work for someone else with a stable, healthy income?`, `你宁愿经营一家几乎不赚不赔的公司，还是为别人打工、拥有稳定健康的收入？`],
+    [`Would you rather live abroad with a modest income or stay home with a comfortable one?`, `你宁愿在国外生活、收入普通，还是留在家乡、生活舒适？`],
+    [`Would you rather have a smaller home fully paid off, or a larger home with a long mortgage?`, `你宁愿拥有一间已还清贷款的小房子，还是一间贷款期很长的大房子？`],
+    [`Would you rather never have to budget again but earn a modest income, or budget carefully but earn a high income?`, `你宁愿再也不用做预算但收入普通，还是要精打细算但收入很高？`],
+    [`Would you rather spend money mostly on experiences or mostly on possessions?`, `你宁愿把钱主要花在体验上，还是主要花在物品上？`]
+  ]},
+  food: { en: "Food & Body", zh: "美食与身体", cards: [
+    [`Would you rather give up sweets forever or give up salty snacks forever?`, `你宁愿永远放弃甜食，还是永远放弃咸味零食？`],
+    [`Would you rather only eat cold food for a year or only eat food at room temperature for a year?`, `你宁愿一年内只能吃冷食，还是只能吃常温食物？`],
+    [`Would you rather lose your sense of taste or your sense of smell?`, `你宁愿失去味觉，还是失去嗅觉？`],
+    [`Would you rather eat your favorite meal every day for a year or never eat it again?`, `你宁愿一年内每天都吃你最喜欢的一餐，还是从此再也不能吃？`],
+    [`Would you rather only be able to drink water for the rest of your life or only be able to eat solid food twice a day?`, `你宁愿余生只能喝水，还是每天只能吃两次固体食物？`],
+    [`Would you rather have to eat with chopsticks for every meal or eat with your hands for every meal?`, `你宁愿每一餐都用筷子吃，还是每一餐都用手吃？`],
+    [`Would you rather never eat dessert again or never eat fried food again?`, `你宁愿再也不能吃甜点，还是再也不能吃油炸食物？`],
+    [`Would you rather be able to eat anything without gaining weight, or never feel hungry again?`, `你宁愿吃什么都不会胖，还是永远不会感到饥饿？`],
+    [`Would you rather have to cook every meal from scratch, or only eat takeout for the rest of your life?`, `你宁愿以后每一餐都要从零开始自己煮，还是余生只能吃外卖？`],
+    [`Would you rather give up caffeine forever or give up alcohol forever?`, `你宁愿永远戒掉咖啡因，还是永远戒掉酒精？`],
+    [`Would you rather be a foot taller or a foot shorter?`, `你宁愿长高30厘米，还是矮30厘米？`],
+    [`Would you rather have the ability to run at 30 miles per hour or lift 10 times your body weight?`, `你宁愿能以时速50公里奔跑，还是能举起10倍于自己体重的东西？`],
+    [`Would you rather never get sick again but never build immunity, or get sick often but recover instantly?`, `你宁愿再也不会生病但也不会产生免疫力，还是经常生病但每次都能瞬间痊愈？`],
+    [`Would you rather have perfect eyesight but average hearing, or perfect hearing but average eyesight?`, `你宁愿拥有完美的视力但听力普通，还是拥有完美的听力但视力普通？`],
+    [`Would you rather never need to exercise to stay fit, or never need to sleep more than 4 hours?`, `你宁愿不运动也能保持健康，还是每天只需要睡4小时就足够？`],
+    [`Would you rather have unlimited energy but average strength, or great strength but tire easily?`, `你宁愿拥有无限的精力但力气普通，还是拥有强大的力气但很容易疲惫？`],
+    [`Would you rather age normally but never get wrinkles, or stay physically young but your hair turns gray immediately?`, `你宁愿正常衰老但永远不长皱纹，还是身体保持年轻但头发立刻变白？`],
+    [`Would you rather have the metabolism of a hummingbird or the strength of an ox?`, `你宁愿拥有蜂鸟一样的新陈代谢，还是拥有牛一样的力气？`],
+    [`Would you rather only be able to whisper for the rest of your life or only be able to shout?`, `你宁愿余生只能小声说话，还是只能大声喊？`],
+    [`Would you rather have double-jointed fingers or be double-jointed everywhere?`, `你宁愿只有手指是"双关节"，还是全身关节都是"双关节"？`],
+    [`Would you rather be extremely flexible but weak, or extremely strong but stiff?`, `你宁愿身体非常柔软但力气很小，还是力气很大但身体很僵硬？`],
+    [`Would you rather have a photographic memory for faces or names?`, `你宁愿对人脸过目不忘，还是对名字过目不忘？`],
+    [`Would you rather never feel physically tired or never feel mentally tired?`, `你宁愿身体永远不会累，还是脑子永远不会累？`],
+    [`Would you rather sweat a lot but never smell, or never sweat but be prone to overheating?`, `你宁愿容易出汗但从不会有汗味，还是从不出汗但容易中暑？`],
+    [`Would you rather have naturally curly hair or naturally straight hair for life?`, `你宁愿一辈子天生卷发，还是天生直发？`],
+    [`Would you rather be allergic to your favorite food or be able to eat anything but always feel slightly full?`, `你宁愿对你最喜欢的食物过敏，还是可以吃任何东西但总感觉有点饱？`],
+    [`Would you rather have super fast reflexes or super sharp intuition?`, `你宁愿拥有超快的反应速度，还是超敏锐的直觉？`],
+    [`Would you rather never need caffeine to feel awake, or never feel jet lag again?`, `你宁愿不喝咖啡因也能保持清醒，还是从此再也不会有时差反应？`],
+    [`Would you rather have a naturally calm resting heart rate or naturally low stress levels?`, `你宁愿天生静息心率很低，还是天生压力水平很低？`],
+    [`Would you rather always know exactly how many calories are in your food, or never think about calories at all?`, `你宁愿永远确切知道食物的热量，还是完全不去想热量这件事？`]
+  ]},
+  social: { en: "Social & Relationships", zh: "社交与人际", cards: [
+    [`Would you rather have one best friend for life or a big group of good friends who come and go?`, `你宁愿拥有一位一生的挚友，还是一大群来来去去的好朋友？`],
+    [`Would you rather always be the funniest person in the room or always be the most trusted?`, `你宁愿永远是全场最幽默的人，还是永远是最被信任的人？`],
+    [`Would you rather move away from all your friends for your dream opportunity, or stay close but miss out?`, `你宁愿为了梦想中的机会离开所有朋友，还是留在他们身边但错过机会？`],
+    [`Would you rather be brutally honest with everyone or always tell comforting white lies?`, `你宁愿对所有人都直言不讳，还是总是说善意的谎言来安慰别人？`],
+    [`Would you rather have a small close-knit friend group or a huge wide social circle?`, `你宁愿拥有一个紧密的小圈子，还是一个庞大宽广的社交圈？`],
+    [`Would you rather always be the one who reaches out first, or always wait for others to reach out to you?`, `你宁愿永远主动联系别人，还是永远等别人先联系你？`],
+    [`Would you rather know what everyone really thinks of you, or never know and just assume the best?`, `你宁愿知道所有人对你的真实看法，还是永远不知道、只往好处想？`],
+    [`Would you rather be everyone's second choice for everything, or a small group's absolute first choice?`, `你宁愿是所有人的"第二选择"，还是一小群人的"绝对首选"？`],
+    [`Would you rather have friends who challenge you constantly, or friends who always agree with you?`, `你宁愿拥有总是挑战你的朋友，还是总是附和你的朋友？`],
+    [`Would you rather lose touch with an old friend slowly, or have a sudden falling out but reconcile quickly?`, `你宁愿和老朋友渐行渐远，还是突然大吵一架但很快和好？`],
+    [`Would you rather be well-liked by many but not deeply known, or deeply known by a few but not widely liked?`, `你宁愿被很多人喜欢却没人真正了解你，还是被少数人深深了解却不被大众喜欢？`],
+    [`Would you rather always plan the group hangouts, or always just show up to whatever's planned?`, `你宁愿永远负责策划聚会，还是永远只需要按时出现？`],
+    [`Would you rather have a friend group that's extremely reliable but a bit boring, or spontaneous but a bit flaky?`, `你宁愿拥有一个非常可靠但有点无聊的朋友圈，还是随性有趣但有点不靠谱的朋友圈？`],
+    [`Would you rather forgive easily and forget quickly, or hold grudges but rarely get hurt in the first place?`, `你宁愿很容易原谅、很快忘记，还是很少受伤、但一旦记仇就很难放下？`],
+    [`Would you rather be the peacemaker in every group conflict, or stay out of conflicts entirely?`, `你宁愿在每次群体冲突中都当和事佬，还是完全置身事外？`],
+    [`Would you rather have a friend who's always brutally honest, or one who's always supportive no matter what?`, `你宁愿拥有一个总是直言不讳的朋友，还是一个无论如何都支持你的朋友？`],
+    [`Would you rather receive compliments in private or in front of a group?`, `你宁愿私下收到夸奖，还是在众人面前收到夸奖？`],
+    [`Would you rather have your friends plan a surprise party for you, or plan one yourself exactly how you want it?`, `你宁愿让朋友为你策划一场惊喜派对，还是自己按照心意策划一场？`],
+    [`Would you rather be known as the reliable one or the fun one?`, `你宁愿被认为是"可靠的那个"，还是"有趣的那个"？`],
+    [`Would you rather have a friend group that texts constantly, or one that goes quiet for weeks but picks up like no time passed?`, `你宁愿拥有一个每天都在聊天的朋友圈，还是一个几周不联系但见面时依旧默契的朋友圈？`],
+    [`Would you rather always be included but rarely consulted, or rarely included but always consulted?`, `你宁愿总是被邀请但很少被征询意见，还是很少被邀请但总是被征询意见？`],
+    [`Would you rather have one friend who knows everything about you, or several friends who each know a different side of you?`, `你宁愿拥有一位了解你全部的朋友，还是好几位分别了解你不同面向的朋友？`],
+    [`Would you rather be able to make new friends easily but struggle to keep them, or make friends slowly but keep them forever?`, `你宁愿很容易交到新朋友但难以维持，还是交朋友很慢但一旦交上就是一辈子？`],
+    [`Would you rather always be the listener in your friendships, or always be the one being listened to?`, `你宁愿在友谊中永远是倾听者，还是永远是被倾听的那一方？`],
+    [`Would you rather have friends who challenge your comfort zone often, or friends who respect it always?`, `你宁愿拥有经常挑战你舒适圈的朋友，还是总是尊重你舒适圈的朋友？`],
+    [`Would you rather have a friendship built on shared humor, or one built on deep conversation?`, `你宁愿一段友谊建立在共同的幽默感上，还是建立在深度对话上？`],
+    [`Would you rather be the friend people call in a crisis, or the friend people call to celebrate?`, `你宁愿是大家遇到危机时会打电话找的朋友，还是庆祝时会想到的朋友？`],
+    [`Would you rather have a friend group with no drama but less excitement, or lots of excitement but occasional drama?`, `你宁愿拥有一个毫无是非但也少了刺激的朋友圈，还是充满刺激但偶尔会有摩擦的朋友圈？`],
+    [`Would you rather always know the group's plans in advance, or always be pleasantly surprised at the last minute?`, `你宁愿总能提前知道大家的计划，还是总是在最后一刻收到惊喜？`],
+    [`Would you rather have a friendship that's low-maintenance but a bit distant, or high-maintenance but very close?`, `你宁愿拥有一段不需要经营却有点疏远的友谊，还是需要用心经营但非常亲密的友谊？`]
+  ]},
+  career: { en: "Career & Ambition", zh: "事业与野心", cards: [
+    [`Would you rather have your dream job with average pay, or an average job with your dream pay?`, `你宁愿从事梦想中的工作但薪水普通，还是从事普通的工作但拿到梦想中的薪水？`],
+    [`Would you rather be your own boss with unpredictable income, or work for someone else with a stable salary?`, `你宁愿自己当老板但收入不稳定，还是为别人打工但收入稳定？`],
+    [`Would you rather be famous in your field but unknown outside it, or well-known generally but not a true expert in anything?`, `你宁愿在自己的领域出名但外界无人知晓，还是整体小有名气但没有真正精通的领域？`],
+    [`Would you rather have a job that's meaningful but exhausting, or easy but unfulfilling?`, `你宁愿从事一份有意义但很累的工作，还是一份轻松但没有成就感的工作？`],
+    [`Would you rather work with a difficult boss you respect, or a friendly boss you don't respect?`, `你宁愿有一位你尊敬但很难相处的老板，还是一位友善但你并不尊敬的老板？`],
+    [`Would you rather have complete job security with limited growth, or high growth potential with constant uncertainty?`, `你宁愿拥有完全的工作保障但成长空间有限，还是成长潜力很大但充满不确定性？`],
+    [`Would you rather be excellent at many things or a true master of one?`, `你宁愿在许多事情上都表现优秀，还是在一件事上做到真正的精通？`],
+    [`Would you rather take a big career risk with a chance of failure, or play it safe and always wonder "what if"?`, `你宁愿冒险追求一次可能失败的机会，还是安于现状但心里总会想"如果当初"？`],
+    [`Would you rather be recognized publicly for your work, or know privately that you did great work?`, `你宁愿因为自己的成就获得公开认可，还是私下里知道自己做得很好就好？`],
+    [`Would you rather work fewer hours in a role you're okay with, or more hours in a role you're passionate about?`, `你宁愿从事一份你还算满意但工时较短的工作，还是一份你充满热忱但工时更长的工作？`],
+    [`Would you rather lead a team or be a top individual contributor?`, `你宁愿领导一个团队，还是成为团队中最顶尖的个人贡献者？`],
+    [`Would you rather have a job that challenges you daily, or one that's comfortable and predictable?`, `你宁愿从事一份每天都充满挑战的工作，还是一份舒适又可预测的工作？`],
+    [`Would you rather switch careers entirely at 40, or stay in a career you've outgrown for stability?`, `你宁愿在40岁彻底转行，还是为了稳定继续留在一个你已经不再热爱的行业？`],
+    [`Would you rather have a job title that sounds impressive but pays modestly, or an unglamorous title with great pay?`, `你宁愿拥有一个听起来很风光但薪水普通的职位，还是一个不起眼但薪水丰厚的职位？`],
+    [`Would you rather work remotely forever or always work in a vibrant office environment?`, `你宁愿永远远程工作，还是永远在一个充满活力的办公室环境中工作？`],
+    [`Would you rather have a mentor who pushes you hard, or a mentor who's endlessly encouraging?`, `你宁愿拥有一位对你要求严格的导师，还是一位无限鼓励你的导师？`],
+    [`Would you rather achieve success slowly and steadily, or quickly but with a higher risk of losing it?`, `你宁愿慢慢地、稳稳地取得成功，还是快速成功但更容易失去它？`],
+    [`Would you rather work on one big project for years, or juggle many smaller projects at once?`, `你宁愿花好几年专注做一个大项目，还是同时兼顾很多个小项目？`],
+    [`Would you rather have a career that impresses others, or one that genuinely fulfills you even if others don't understand it?`, `你宁愿从事一份能让别人印象深刻的事业，还是一份真正让你满足、即使别人不理解的事业？`],
+    [`Would you rather be the person who comes up with the ideas, or the person who executes them well?`, `你宁愿是那个提出创意的人，还是把创意执行得很好的人？`],
+    [`Would you rather have unlimited vacation days but a demanding job, or fixed vacation but a relaxed job?`, `你宁愿拥有无限的假期但工作要求很高，还是假期固定但工作很轻松？`],
+    [`Would you rather build something from nothing, or improve something that already exists?`, `你宁愿从零开始创造一件事物，还是把已经存在的事物做得更好？`],
+    [`Would you rather be known for consistency or for brilliance?`, `你宁愿以"稳定可靠"闻名，还是以"才华出众"闻名？`],
+    [`Would you rather have your career defined by one huge achievement, or many smaller consistent wins?`, `你宁愿事业以一次巨大的成就来定义，还是由许多个小小的、持续的成功累积而成？`],
+    [`Would you rather work in a fast-paced, high-pressure environment, or a slower, low-pressure one, for the same pay?`, `在薪水相同的情况下，你宁愿在节奏快、压力大的环境中工作，还是节奏慢、压力小的环境？`],
+    [`Would you rather have total creative freedom with less structure, or clear structure with less creative freedom?`, `你宁愿拥有完全的创作自由但缺乏架构，还是有清晰的架构但创作自由较少？`],
+    [`Would you rather be self-taught and prove yourself, or highly credentialed but untested?`, `你宁愿靠自学证明自己，还是拥有亮眼的学历但未经实战检验？`],
+    [`Would you rather have a job that lets you travel constantly, or one that lets you stay rooted in one place?`, `你宁愿从事一份需要经常出差旅行的工作，还是一份能让你安定在一个地方的工作？`],
+    [`Would you rather take feedback from a room full of critics, or work in total isolation with no feedback at all?`, `你宁愿在满是批评者的房间里接受反馈，还是完全独自工作、没有任何反馈？`],
+    [`Would you rather retire early and figure out purpose later, or work later in life doing something meaningful?`, `你宁愿提早退休、以后再去寻找人生意义，还是晚一点退休、一直做有意义的事？`]
+  ]},
+  survival: { en: "Survival & Adventure", zh: "求生与冒险", cards: [
+    [`Would you rather be stranded on a deserted island alone, or with someone you don't get along with?`, `你宁愿独自一人被困荒岛，还是和一个你处不来的人一起被困荒岛？`],
+    [`Would you rather survive in the freezing Arctic or the scorching desert?`, `你宁愿在冰天雪地的北极求生，还是在酷热的沙漠求生？`],
+    [`Would you rather go on a spontaneous month-long backpacking trip, or a carefully planned two-week luxury vacation?`, `你宁愿来一趟说走就走、为期一个月的背包旅行，还是精心规划、为期两周的豪华假期？`],
+    [`Would you rather explore a cave system or climb a mountain?`, `你宁愿探索洞穴系统，还是攀登高山？`],
+    [`Would you rather have to build your own shelter from scratch, or find and purify your own water source?`, `你宁愿从零开始搭建自己的庇护所，还是要自己寻找并净化水源？`],
+    [`Would you rather go on a solo adventure with no plan, or a group adventure with a strict itinerary?`, `你宁愿独自一人无计划地冒险，还是跟团严格按行程走？`],
+    [`Would you rather cross a rickety rope bridge or swim across a river with a strong current?`, `你宁愿走过一座摇摇晃晃的绳索桥，还是游过一条水流湍急的河？`],
+    [`Would you rather camp in the wilderness with no phone signal for a week, or stay in a busy city hostel for a month?`, `你宁愿在没有手机信号的荒野露营一周，还是在繁忙的城市青旅住一个月？`],
+    [`Would you rather have to hunt or forage for all your food for a week, or fast for three days?`, `你宁愿一周内都要靠打猎或采集来获取食物，还是禁食三天？`],
+    [`Would you rather sleep in a tent during a thunderstorm, or in a cabin with strange noises outside?`, `你宁愿在雷雨天睡帐篷，还是在小木屋里听着外面奇怪的声响入睡？`],
+    [`Would you rather trek through a dense jungle or trek across an open desert?`, `你宁愿穿越茂密的丛林，还是横越空旷的沙漠？`],
+    [`Would you rather have to navigate using only the stars, or only a basic map with no compass?`, `你宁愿只靠星星辨认方向，还是只靠一张没有指南针的基本地图？`],
+    [`Would you rather go skydiving or scuba diving in open water?`, `你宁愿去跳伞，还是去开放水域潜水？`],
+    [`Would you rather be lost in a big city with no money, or lost in the wilderness with basic supplies?`, `你宁愿身无分文迷失在大城市，还是带着基本装备迷失在荒野？`],
+    [`Would you rather ride out a long road trip with no music, or a short flight with constant turbulence?`, `你宁愿经历一趟没有音乐的长途公路旅行，还是一趟持续颠簸的短途飞行？`],
+    [`Would you rather explore an abandoned building or an uncharted forest trail?`, `你宁愿探索一栋废弃的建筑，还是一条未知的森林小径？`],
+    [`Would you rather have to start a fire with no matches, or catch your own fish with no rod?`, `你宁愿没有火柴也要生火，还是没有钓竿也要抓到鱼？`],
+    [`Would you rather go on an adventure with unpredictable weather, or predictable weather but a boring route?`, `你宁愿踏上一场天气难以预测的冒险，还是天气可预测但路线无聊的旅程？`],
+    [`Would you rather live off-grid in nature for a year, or live in a bustling foreign city where you don't speak the language?`, `你宁愿在大自然中离网生活一年，还是在一个语言不通的繁忙外国城市生活一年？`],
+    [`Would you rather kayak down a river or hike a multi-day trail?`, `你宁愿划独木舟顺流而下，还是徒步走一条要好几天才能走完的路线？`],
+    [`Would you rather travel somewhere with no set plans and figure it out as you go, or have every day scheduled?`, `你宁愿去一个没有计划、走一步算一步的地方，还是每一天都被安排得满满的？`],
+    [`Would you rather face a minor but constant danger, or a rare but major one?`, `你宁愿面对轻微但持续存在的危险，还是罕见但严重的危险？`],
+    [`Would you rather explore ancient ruins or a modern megacity you've never been to?`, `你宁愿探索古代遗迹，还是探索一座你从没去过的现代大都市？`],
+    [`Would you rather be responsible for navigating your group, or responsible for keeping morale up?`, `你宁愿负责为团队导航，还是负责维持团队的士气？`],
+    [`Would you rather go on a road trip with no destination, or a flight to a destination you didn't choose?`, `你宁愿来一趟没有目的地的公路旅行，还是坐飞机去一个不是你自己选的地方？`],
+    [`Would you rather bike across a country or sail across a sea?`, `你宁愿骑自行车横越一个国家，还是航海横渡一片海洋？`],
+    [`Would you rather have to rely on your instincts in an unfamiliar place, or rely entirely on a guide you just met?`, `你宁愿在陌生的地方全靠自己的直觉，还是完全依赖一位刚认识的向导？`],
+    [`Would you rather try an extreme sport you've never done, or revisit a place from your past?`, `你宁愿尝试一项你从未做过的极限运动，还是重新造访一个你过去去过的地方？`],
+    [`Would you rather live nomadically, moving every few months, or settle permanently in one place forever?`, `你宁愿过游牧生活、每隔几个月就搬一次家，还是永远定居在一个地方？`],
+    [`Would you rather face your biggest fear once for a big reward, or avoid it forever with no reward?`, `你宁愿为了一份大奖励去面对你最大的恐惧一次，还是永远逃避、什么奖励也没有？`]
+  ]},
+  time: { en: "Time & History", zh: "时间与历史", cards: [
+    [`Would you rather live 100 years in the past or 100 years in the future?`, `你宁愿生活在100年前，还是100年后？`],
+    [`Would you rather witness a major historical event firsthand or invent something that changes history?`, `你宁愿亲眼见证一个重大历史事件，还是发明一样改变历史的东西？`],
+    [`Would you rather know exactly how you'll die, or exactly when but not how?`, `你宁愿确切知道自己会怎么死，还是确切知道时间但不知道方式？`],
+    [`Would you rather have the ability to pause time for everyone but you, or speed up time when you're bored?`, `你宁愿能让时间对所有人静止、只有你能动，还是能在无聊时加速时间流逝？`],
+    [`Would you rather relive your best day over and over, or move forward and never look back?`, `你宁愿反复重温你最美好的一天，还是一直向前、从不回头？`],
+    [`Would you rather grow up in a different decade of your choosing, or stay exactly when you did?`, `你宁愿在你选择的另一个年代中成长，还是就维持在你实际成长的年代？`],
+    [`Would you rather have access to all future technology but none of today's conveniences, or vice versa?`, `你宁愿拥有未来所有的科技但没有今天的便利设施，还是反过来？`],
+    [`Would you rather live without knowing your future, or know every major event that will happen to you?`, `你宁愿完全不知道自己的未来，还是知道所有会发生在自己身上的重大事件？`],
+    [`Would you rather be a famous historical figure for a day, or an ordinary person from 500 years in the future for a day?`, `你宁愿当一天历史上的名人，还是当一天500年后的普通人？`],
+    [`Would you rather have unlimited time but limited energy, or unlimited energy but limited time?`, `你宁愿拥有无限的时间但精力有限，还是拥有无限的精力但时间有限？`],
+    [`Would you rather skip straight to your favorite part of the year every year, or experience every part fully?`, `你宁愿每年都直接跳到你最喜欢的那个阶段，还是完整经历每一个阶段？`],
+    [`Would you rather live through history's most exciting era, or history's most peaceful era?`, `你宁愿活在历史上最精彩刺激的时代，还是最和平的时代？`],
+    [`Would you rather have a rewind button for the past week, or a fast-forward button for the next week?`, `你宁愿拥有一个能倒回过去一周的按钮，还是一个能快进接下来一周的按钮？`],
+    [`Would you rather know the exact date the world will change forever, or never know and be surprised?`, `你宁愿确切知道世界会永远改变的那个日期，还是永远不知道、让它成为一个惊喜？`],
+    [`Would you rather live a life that feels long but ordinary, or short but extraordinary?`, `你宁愿过一个感觉漫长但平凡的人生，还是短暂但非凡的人生？`],
+    [`Would you rather time travel to witness your parents as young adults, or your future grandchildren as adults?`, `你宁愿穿越时间去看年轻时的父母，还是去看未来长大成人的孙辈？`],
+    [`Would you rather be able to relive one year of your life, or skip directly to a specific age in the future?`, `你宁愿能重新经历人生中的某一年，还是直接跳到未来的某个特定年纪？`],
+    [`Would you rather have lived through a historic celebration, or a historic turning point?`, `你宁愿亲身经历过一场历史性的庆典，还是一个历史性的转折点？`],
+    [`Would you rather know how your life story ends, or write it without ever knowing?`, `你宁愿知道自己人生故事的结局，还是永远不知道地把它写下去？`],
+    [`Would you rather have grown up with today's technology or without any screens at all?`, `你宁愿在拥有现代科技的环境中长大，还是完全没有屏幕的环境中长大？`],
+    [`Would you rather live in a time capsule for 10 years and reemerge, or stay present and watch everything change slowly?`, `你宁愿在时间胶囊里待10年后重新出现，还是留在当下、慢慢看着一切改变？`],
+    [`Would you rather be remembered 100 years from now, or be perfectly happy but forgotten?`, `你宁愿100年后依然被人记住，还是过得非常幸福但被遗忘？`],
+    [`Would you rather have witnessed the invention of the wheel or the invention of the internet?`, `你宁愿亲眼见证轮子的发明，还是互联网的发明？`],
+    [`Would you rather live in an age of exploration or an age of innovation?`, `你宁愿生活在探索的时代，还是创新的时代？`],
+    [`Would you rather have a week frozen in time to catch up on everything, or an extra day added to every week going forward?`, `你宁愿有一整周的时间静止、让你把事情都补上，还是从今往后每周都多一天？`],
+    [`Would you rather know your ancestors' full history, or leave a legacy your descendants will fully know?`, `你宁愿了解祖先完整的历史，还是为后代留下他们能完全了解的传承？`],
+    [`Would you rather live in an era before smartphones existed, or one 50 years past today's technology?`, `你宁愿活在智能手机出现之前的年代，还是比现在的科技先进50年的年代？`],
+    [`Would you rather have the wisdom of your 80-year-old self now, or the energy of your 20-year-old self at 80?`, `你宁愿现在就拥有80岁时的智慧，还是80岁时依然拥有20岁的精力？`],
+    [`Would you rather have your childhood back for one day, or your future revealed for one minute?`, `你宁愿把童年找回来度过一天，还是让未来在一分钟内揭晓？`],
+    [`Would you rather live life at double speed or half speed?`, `你宁愿以双倍速度过生活，还是以一半的速度过生活？`]
+  ]},
+  popculture: { en: "Pop Culture & Entertainment", zh: "流行文化与娱乐", cards: [
+    [`Would you rather only watch movies for the rest of your life or only watch TV shows?`, `你宁愿余生只能看电影，还是只能看电视剧？`],
+    [`Would you rather live inside your favorite book or your favorite movie?`, `你宁愿活在你最喜欢的小说里，还是最喜欢的电影里？`],
+    [`Would you rather have the soundtrack of your life be all one genre, or a random shuffle of everything?`, `你宁愿人生的背景音乐永远是同一种曲风，还是随机混杂所有曲风？`],
+    [`Would you rather only listen to one artist for the rest of your life, or never listen to your favorite artist again?`, `你宁愿余生只能听一位歌手的歌，还是永远不能再听你最喜欢的那位歌手？`],
+    [`Would you rather be a background character in your favorite show, or the main character in a show you dislike?`, `你宁愿在你最喜欢的剧里当一个路人角色，还是在你不喜欢的剧里当主角？`],
+    [`Would you rather have every movie spoiled for you before watching, or never be able to discuss movies with anyone?`, `你宁愿看每部电影前都先被剧透，还是永远不能和任何人讨论电影？`],
+    [`Would you rather only be able to watch shows from your childhood, or only new releases from now on?`, `你宁愿以后只能看童年时期的剧，还是只能看以后的新剧？`],
+    [`Would you rather have a photographic memory for movie quotes, or for song lyrics?`, `你宁愿对电影台词过目不忘，还是对歌词过目不忘？`],
+    [`Would you rather attend a concert of your favorite artist with terrible seats, or watch it from home in perfect quality?`, `你宁愿去看你最喜欢歌手的演唱会但座位很差，还是在家用完美画质观看？`],
+    [`Would you rather have unlimited access to unreleased movies, or front-row seats to every concert you want?`, `你宁愿拥有无限的未上映电影观看权，还是任何演唱会都能坐第一排？`],
+    [`Would you rather binge an entire series in one sitting, or watch one episode a week for months?`, `你宁愿一口气追完整部剧，还是每周只看一集、追好几个月？`],
+    [`Would you rather be famous for something you're proud of but small, or famous for something huge but slightly embarrassing?`, `你宁愿因为一件你引以为傲但影响不大的事而出名，还是因为一件影响巨大但有点尴尬的事而出名？`],
+    [`Would you rather have a cameo in your favorite show, or write an episode of it yourself?`, `你宁愿在你最喜欢的剧里客串一角，还是自己为它写一集剧本？`],
+    [`Would you rather only read reviews before watching something, or go in completely blind every time?`, `你宁愿每次看之前都先看评论，还是每次都完全不做任何了解就直接看？`],
+    [`Would you rather have the acting skills of your favorite actor, or the singing skills of your favorite singer?`, `你宁愿拥有你最喜欢演员的演技，还是最喜欢歌手的歌喉？`],
+    [`Would you rather live without music for a month, or without movies and TV for a month?`, `你宁愿一个月没有音乐，还是一个月没有电影和电视剧？`],
+    [`Would you rather have your own talk show, or your own podcast?`, `你宁愿拥有自己的脱口秀节目，还是自己的播客节目？`],
+    [`Would you rather know how every show ends before watching, or watch a show that never has a proper ending?`, `你宁愿在看之前就知道每部剧的结局，还是看一部永远没有正式结局的剧？`],
+    [`Would you rather rewatch your favorite trilogy every year, or watch a new movie every day for a year?`, `你宁愿每年都重看一遍你最喜欢的三部曲，还是一年内每天都看一部新电影？`],
+    [`Would you rather be a talented but unknown musician, or a mediocre but famous one?`, `你宁愿是一位才华横溢但默默无闻的音乐人，还是一位平庸但出名的音乐人？`],
+    [`Would you rather have your favorite show get an unexpected extra season, or a perfect but early ending?`, `你宁愿你最喜欢的剧意外多出一季，还是拥有一个完美但提早到来的结局？`],
+    [`Would you rather meet your favorite fictional character in real life, or your favorite celebrity?`, `你宁愿在现实中见到你最喜欢的虚构角色，还是最喜欢的明星？`],
+    [`Would you rather have amazing taste in movies but terrible taste in music, or the reverse?`, `你宁愿电影品味极佳但音乐品味很差，还是反过来？`],
+    [`Would you rather your life be turned into a documentary or a sitcom?`, `你宁愿你的人生被拍成纪录片，还是情景喜剧？`],
+    [`Would you rather only be able to watch shows in a language you don't understand, or only read books without pictures for entertainment?`, `你宁愿只能看你听不懂的语言的剧，还是只能靠没有插图的书来娱乐？`],
+    [`Would you rather have unlimited streaming but really slow internet, or fast internet but no streaming subscriptions?`, `你宁愿拥有无限的流媒体账号但网速很慢，还是网速很快但没有任何流媒体订阅？`],
+    [`Would you rather your favorite band reunite for one final concert, or release one final album?`, `你宁愿你最喜欢的乐队重组开一场最后的演唱会，还是发行一张最后的专辑？`],
+    [`Would you rather have front-row knowledge of every movie plot twist, or be perpetually surprised but sometimes confused?`, `你宁愿提前知道每部电影的所有剧情反转，还是永远被惊喜到、但有时会看不懂？`],
+    [`Would you rather have your own fan base, or be part of someone else's incredibly passionate fandom?`, `你宁愿拥有自己的粉丝群，还是成为某个超级热情粉丝圈的一员？`],
+    [`Would you rather relive your favorite concert experience once more, or discover a brand-new favorite artist tomorrow?`, `你宁愿再重温一次你最喜欢的演唱会体验，还是明天发现一位全新的最爱歌手？`]
+  ]},
+  deep: { en: "Deep & Reflective", zh: "深度思考", cards: [
+    [`Would you rather always know the truth even if it hurts, or be comfortably unaware?`, `你宁愿永远知道真相，即使它会伤人，还是活在舒适的无知中？`],
+    [`Would you rather have a life full of highs and lows, or a life that's consistently just "fine"?`, `你宁愿人生大起大落，还是一直平平淡淡、"还行"？`],
+    [`Would you rather be deeply understood by a few people, or well-liked by many?`, `你宁愿被少数人深深理解，还是被很多人喜欢？`],
+    [`Would you rather achieve your biggest goal but lose something important along the way, or stay safe and never know what could've been?`, `你宁愿实现最大的目标但在过程中失去某些重要的东西，还是安于现状、永远不知道原本可能会怎样？`],
+    [`Would you rather live a life others envy but you're privately unhappy in, or a quiet life you're truly content with?`, `你宁愿过着别人羡慕、但自己私下并不快乐的生活，还是过着平静却真正满足的生活？`],
+    [`Would you rather have all your questions about life answered, or keep the mystery and figure it out yourself?`, `你宁愿所有关于人生的疑问都有答案，还是保留这份未知、自己去摸索？`],
+    [`Would you rather make a small positive difference in many people's lives, or a huge difference in one person's life?`, `你宁愿在很多人的生命中带来一点点正面的影响，还是在一个人的生命中带来巨大的改变？`],
+    [`Would you rather be remembered for your kindness or your achievements?`, `你宁愿被人记住你的善良，还是你的成就？`],
+    [`Would you rather never experience heartbreak but never fully fall in love (any kind of love), or experience both fully?`, `你宁愿永远不经历心碎、但也永远不会完全爱上什么（任何形式的爱），还是两者都完整经历？`],
+    [`Would you rather have a life story worth telling, or a life that's simply peaceful?`, `你宁愿拥有一个值得讲述的人生故事，还是一个简单平静的人生？`],
+    [`Would you rather always choose logic over emotion, or emotion over logic?`, `你宁愿永远选择理性而非感性，还是感性而非理性？`],
+    [`Would you rather live a life true to yourself but misunderstood by others, or accepted by others but never fully yourself?`, `你宁愿活得忠于自己却不被他人理解，还是被他人接纳却永远无法完全做自己？`],
+    [`Would you rather have the freedom to fail without judgment, or the safety net of always succeeding but always being watched?`, `你宁愿拥有失败也不会被评判的自由，还是拥有总是成功、但总被密切关注的安全网？`],
+    [`Would you rather forgive someone who never apologizes, or never forgive but move on anyway?`, `你宁愿原谅一个从不道歉的人，还是不原谅但依然向前走？`],
+    [`Would you rather know your purpose but struggle to fulfill it, or never know your purpose but feel content regardless?`, `你宁愿知道自己的人生使命却难以实现，还是不知道使命但依然感到满足？`],
+    [`Would you rather have all your dreams come true but lose your sense of wonder, or keep chasing dreams forever?`, `你宁愿所有梦想都成真、但从此失去好奇与惊叹之心，还是永远在追梦的路上？`],
+    [`Would you rather live authentically and be criticized, or live cautiously and be safe?`, `你宁愿活得真实但会被批评，还是活得谨慎但很安全？`],
+    [`Would you rather have a life full of meaningful struggle, or one that's comfortable but uneventful?`, `你宁愿过一个充满有意义的挣扎的人生，还是一个舒适却平淡无奇的人生？`],
+    [`Would you rather always speak your truth even at a cost, or keep the peace even if it means silencing yourself?`, `你宁愿总是说出真心话、即使要付出代价，还是为了维持和平而选择沉默？`],
+    [`Would you rather be someone's whole world, or the world to no one but fully yourself?`, `你宁愿成为某个人的整个世界，还是不是任何人的全部、但完全做自己？`],
+    [`Would you rather live without regrets but never grow from mistakes, or carry a few regrets that shaped who you are?`, `你宁愿一生毫无遗憾但也从未从错误中成长，还是带着一些遗憾、但这些遗憾塑造了现在的你？`],
+    [`Would you rather have unconditional self-confidence, or unconditional love from others?`, `你宁愿拥有毫无条件的自信，还是他人毫无条件的爱？`],
+    [`Would you rather live a life that inspires others quietly, or loudly and visibly?`, `你宁愿默默地激励他人，还是高调、显而易见地激励他人？`],
+    [`Would you rather have peace of mind but modest success, or great success but constant inner restlessness?`, `你宁愿内心平静但成就普通，还是成就斐然但内心永不平静？`],
+    [`Would you rather always be able to let go easily, or always hold on deeply?`, `你宁愿总是能轻易放下，还是总是深深地放不下？`],
+    [`Would you rather know exactly what you want out of life, or spend your whole life discovering it?`, `你宁愿确切知道自己想要什么样的人生，还是花一辈子去探索它？`],
+    [`Would you rather live simply and be at peace, or live ambitiously and always strive for more?`, `你宁愿简单生活、内心平静，还是雄心勃勃、永远追求更多？`],
+    [`Would you rather have wisdom without experience, or experience without wisdom?`, `你宁愿拥有智慧却没有经历，还是拥有经历却没有智慧？`],
+    [`Would you rather be right and alone in your view, or wrong but surrounded by agreement?`, `你宁愿看法正确但孤立无援，还是看法错误但众人都赞同？`],
+    [`Would you rather live a life measured by what you gave, or a life measured by what you received?`, `你宁愿用"付出了什么"来衡量人生，还是用"得到了什么"来衡量人生？`]
+  ]}
+};
+
+const TOPCATS = {
+  fellowship: { label: "Fellowship", decks: FELLOWSHIP_DECKS },
+  friends: { label: "Friends", decks: FRIENDS_DECKS },
+  couples: { label: "Couples", decks: COUPLES_DECKS },
+  wouldyourather: { label: "Would You Rather", decks: WYR_DECKS }
+};
+
+let state = { topKey: null, deckKey: null, order: [], index: 0 };
+
+/* ---------- TELEGRAM MINI APP BRIDGE ----------
+   `tg` is null when this page is opened as a normal website (e.g. while
+   testing in a browser tab), so every call below is guarded — the game
+   works standalone either way. */
+const tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+
+function tgInit() {
+  if (!tg) return;
+  tg.ready();
+  tg.expand();
+  if (tg.disableVerticalSwipes) tg.disableVerticalSwipes(); // stop an accidental swipe-down from closing mid-game
+  if (tg.setBackgroundColor) tg.setBackgroundColor('#05060a');
+  if (tg.setHeaderColor) tg.setHeaderColor('#05060a');
+  if (tg.BackButton) tg.BackButton.onClick(handleTgBack);
+  syncBackButton();
+}
+
+// Telegram's native back button (top-left of the chat header) should mirror
+// the app's own back arrows, so people can use either.
+function handleTgBack() {
+  if (document.getElementById('game').classList.contains('active')) {
+    goCategoryMenu();
+  } else if (document.getElementById('category-menu').classList.contains('active')) {
+    goHome();
+  }
+}
+
+function syncBackButton() {
+  if (!tg || !tg.BackButton) return;
+  const onHome = document.getElementById('home').classList.contains('active');
+  if (onHome) tg.BackButton.hide(); else tg.BackButton.show();
+}
+
+function haptic(style) {
+  if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred(style || 'light');
+}
+
+tgInit();
+
+function shuffleArray(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function comingSoon(name) {
+  const t = document.getElementById('toast');
+  t.textContent = `${name} deck is coming soon 👀`;
+  t.classList.add('show');
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+function totalCount(topKey) {
+  return Object.values(TOPCATS[topKey].decks).reduce((sum, d) => sum + d.cards.length, 0);
+}
+
+function setTheme(topKey) {
+  const phone = document.querySelector('.phone');
+  phone.classList.remove('theme-couples', 'theme-fellowship', 'theme-friends', 'theme-wouldyourather');
+  phone.classList.add('theme-' + topKey);
+}
+
+function openCategoryMenu(topKey) {
+  state.topKey = topKey;
+  const cat = TOPCATS[topKey];
+  const total = totalCount(topKey);
+
+  setTheme(topKey);
+  document.getElementById('menu-title').textContent = cat.label;
+  document.getElementById('play-all-title').textContent = `Play All ${total} (Shuffled)`;
+  document.getElementById('play-all-btn').onclick = () => startCategoryGame(topKey, 'all');
+
+  const list = document.getElementById('sub-list');
+  list.innerHTML = '';
+  Object.keys(cat.decks).forEach(key => {
+    const deck = cat.decks[key];
+    const el = document.createElement('div');
+    el.className = 'sub-card';
+    el.onclick = () => startCategoryGame(topKey, key);
+    el.innerHTML = `
+      <div class="dot"></div>
+      <div class="txt">
+        <div class="en">${deck.en}</div>
+        <div class="zh">${deck.zh}</div>
+      </div>
+      <div class="n">${deck.cards.length}</div>
+    `;
+    list.appendChild(el);
+  });
+
+  document.getElementById('home').classList.remove('active');
+  document.getElementById('game').classList.remove('active');
+  document.getElementById('category-menu').classList.add('active');
+  syncBackButton();
+}
+
+function goHome() {
+  document.getElementById('category-menu').classList.remove('active');
+  document.getElementById('game').classList.remove('active');
+  document.getElementById('home').classList.add('active');
+  syncBackButton();
+}
+
+function goCategoryMenu() {
+  document.getElementById('game').classList.remove('active');
+  openCategoryMenu(state.topKey);
+}
+
+function buildOrder(topKey, deckKey) {
+  let pool = [];
+  const decks = TOPCATS[topKey].decks;
+  if (deckKey === 'all') {
+    Object.keys(decks).forEach(key => {
+      const deck = decks[key];
+      deck.cards.forEach(c => pool.push({ en: c[0], zh: c[1], tag: deck.en }));
+    });
+  } else {
+    const deck = decks[deckKey];
+    deck.cards.forEach(c => pool.push({ en: c[0], zh: c[1], tag: deck.en }));
+  }
+  return shuffleArray(pool);
+}
+
+function startCategoryGame(topKey, deckKey) {
+  state.topKey = topKey;
+  state.deckKey = deckKey;
+  state.order = buildOrder(topKey, deckKey);
+  state.index = 0;
+
+  const cat = TOPCATS[topKey];
+  setTheme(topKey);
+  document.getElementById('game-title').textContent =
+    deckKey === 'all' ? `All ${totalCount(topKey)}` : cat.decks[deckKey].en;
+
+  document.getElementById('category-menu').classList.remove('active');
+  document.getElementById('home').classList.remove('active');
+  document.getElementById('game').classList.add('active');
+  document.getElementById('end-overlay').classList.remove('active');
+  syncBackButton();
+
+  renderCard();
+}
+
+function renderCard() {
+  const total = state.order.length;
+  const idx = state.index;
+  const overlay = document.getElementById('end-overlay');
+
+  if (idx >= total) {
+    overlay.classList.add('active');
+    document.getElementById('progress-fill').style.width = '100%';
+    document.getElementById('progress-label').textContent = `Card ${total} of ${total}`;
+    return;
+  }
+  overlay.classList.remove('active');
+
+  const item = state.order[idx];
+  const cardEl = document.getElementById('card');
+  cardEl.className = 'card entering';
+
+  document.getElementById('card-tag').textContent = item.tag.toUpperCase();
+  document.getElementById('card-num').textContent = String(idx + 1).padStart(3, '0') + ' / ' + total;
+  document.getElementById('card-prompt').textContent = item.en;
+  document.getElementById('card-prompt-zh').textContent = item.zh;
+
+  const pct = Math.round((idx / total) * 100);
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-label').textContent = `Card ${idx + 1} of ${total}`;
+}
+
+function nextCard() {
+  const cardEl = document.getElementById('card');
+  if (state.index >= state.order.length) return;
+  haptic('light');
+  cardEl.classList.add('swiping-out');
+  setTimeout(() => {
+    state.index++;
+    renderCard();
+  }, 180);
+}
+
+function prevCard() {
+  if (state.index > 0) {
+    haptic('light');
+    state.index--;
+    renderCard();
+  }
+}
+
+function shuffleDeck() {
+  haptic('medium');
+  state.order = buildOrder(state.topKey, state.deckKey);
+  state.index = 0;
+  renderCard();
+}
+</script>
+
+</body>
+</html>
